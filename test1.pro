@@ -14,6 +14,7 @@ SOURCES += \
     mainwindow.cpp
 
 HEADERS += \
+    file_utils.h \
     folder_list_item.h \
     mainwindow.h
 

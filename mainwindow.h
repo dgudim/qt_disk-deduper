@@ -37,5 +37,9 @@ private:
     QString masterFolder;
     QString dupesFolder;
 
+    QStringList directories_to_scan;
+    QStringList all_files;
+    QMap<QString, QList<QString>> dupes;
+
 };
 #endif // MAINWINDOW_H

@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#include "./file_utils.h"
+
 #include <QtDebug>
 #include <QMessageBox>
 
@@ -18,6 +20,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     ui->setupUi(this);
 
+    // setup piechart
     QPieSeries *series = new QPieSeries();
 
     QList<QString> keys = piechart_map.keys();
