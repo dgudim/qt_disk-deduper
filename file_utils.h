@@ -7,17 +7,33 @@
 #include <QDirIterator>
 #include <QtDebug>
 
+#include <functional>
 #include <fstream>
 #include <sstream>
 #include <string>
 
-QStringList walkDir(const QString dir) {
+#include <QCryptographicHash>
+
+using std::function;
+
+QStringList walkDir(const QString& dir, function<void(QString)> callback) {
     QStringList list;
     QDirIterator it(dir, QStringList() << "*.*", QDir::Files, QDirIterator::Subdirectories);
+    QString current;
     while (it.hasNext()){
-        list << it.next();
+        current = it.next();
+        callback(current);
+        list << current;
     }
     return list;
+}
+
+QString getFileHash(const QString& file_path) {
+    QFile file(file_path);
+    if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error("Failed opening " + file_path.toStdString());
+    QString hash = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Algorithm::Sha256).toHex();
+    file.close();
+    return hash;
 }
 
 bool string_starts_with(const std::string& string, const std::string& prefix) {

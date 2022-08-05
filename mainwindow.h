@@ -7,6 +7,11 @@
 #include <QFileDialog>
 #include <QListWidget>
 
+#include <QtCharts>
+#include <QChartView>
+#include <QPieSeries>
+#include <QPieSlice>
+
 #include "folder_list_item.h"
 
 QT_BEGIN_NAMESPACE
@@ -20,6 +25,13 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    void hashCompare();
+    void nameCompare();
+    void autoDedupeMove();
+    void autoDedupeRename();
+    void exifRename();
+    void showStats();
+
 private slots:
     void onAddScanFolderClicked();
     void onAddSlaveFolderClicked();
@@ -27,11 +39,17 @@ private slots:
     void onSetMasterFolderClicked();
     void onSetDupesFolderClicked();
 
-    void onAddExtensionButtonClicked();
+    void onCurrentModeChanged(int curr_mode);
 
+    void onStartScanButtonClicked();
+
+    void onAddExtensionButtonClicked();
     void onExtentionCheckboxStateChanged(int arg1);
 
     void removeItemFromList(const QString& text, QListWidget* list);
+    void setCurrentTask(const QString &status);
+signals:
+    void requestCurrentTaskChange(const QString& new_title);
 
 private:
     Ui::MainWindow *ui;
@@ -48,16 +66,24 @@ private:
 
     void displayWarning(const QString &message);
 
-    void setCurrentStatus(const QString &status);
+
+
 
     unsigned long lastMeasuredDiskRead;
     unsigned long program_start_time;
 
+    int currentMode;
+
+    QPieSeries *series;
+
     QString masterFolder;
     QString dupesFolder;
 
-    QStringList directories_to_scan;
     QStringList all_files;
+    QStringList all_file_hashes;
+    unsigned int scanned_files;
+
+    QStringList directories_to_scan;
     QMap<QString, QList<QString>> dupes;
 
 };
