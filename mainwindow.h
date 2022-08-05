@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QAction>
+#include <QTime>
 #include <QFileDialog>
 #include <QListWidget>
 
@@ -22,17 +23,35 @@ public:
 private slots:
     void onAddScanFolderClicked();
     void onAddSlaveFolderClicked();
-    void removeItemFromList(const QString& text, QListWidget* list);
+
     void onSetMasterFolderClicked();
     void onSetDupesFolderClicked();
+
+    void onAddExtensionButtonClicked();
+
+    void onExtentionCheckboxStateChanged(int arg1);
+
+    void removeItemFromList(const QString& text, QListWidget* list);
 
 private:
     Ui::MainWindow *ui;
 
+    void updateLoop100Ms();
+    void updateLoop3s();
+
     void addItemToList(const QString& text, QListWidget* list);
-    QString callFileDialogue(const QString& title, QFileDialog::Options options);
     QListWidgetItem* getFromList(const QString& text, QListWidget* list);
     FolderListItemWidget* widgetFromWidgetItem(QListWidgetItem *item);
+
+    QString callFileDialogue(const QString& title, QFileDialog::Options options);
+    QString callTextDialogue(const QString &title, const QString &prompt);
+
+    void displayWarning(const QString &message);
+
+    void setCurrentStatus(const QString &status);
+
+    unsigned long lastMeasuredDiskRead;
+    unsigned long program_start_time;
 
     QString masterFolder;
     QString dupesFolder;

@@ -16,6 +16,7 @@ SOURCES += \
 HEADERS += \
     file_utils.h \
     folder_list_item.h \
+    gutils.h \
     mainwindow.h
 
 FORMS += \
