@@ -18,6 +18,8 @@ public:
     void setText(const QString &text);
     QString getText();
 
+    void setDisabled(bool disabled);
+
     bool isWhitelisted();
     void setWhitelisted(bool is_whitelisted);
 

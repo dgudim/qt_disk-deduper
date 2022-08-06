@@ -41,7 +41,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     // setup initial values
     program_start_time = QDateTime::currentMSecsSinceEpoch();
-    lastMeasuredDiskRead = getDiskReadSizeKb();
+    lastMeasuredDiskRead = getDiskReadSizeB();
 
     setCurrentTask("Idle");
 
@@ -81,8 +81,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     timer_100Ms->start();
 
     auto timer_1s = new QTimer(this);
-    timer_1s->setInterval(3000); // 3000ms (0.3 times per second)
-    connect(timer_1s, &QTimer::timeout, this, &MainWindow::updateLoop3s);
+    timer_1s->setInterval(2000); // 2000ms (0.5 times per second)
+    connect(timer_1s, &QTimer::timeout, this, &MainWindow::updateLoop2s);
     timer_1s->start();
 
     // setup ui listeners
@@ -110,7 +110,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::updateLoop100Ms() {
      // update uptime
-    ui->uptime_label->setText(QString("Uptime: %1").arg(millisecondsToReadable(QDateTime::currentMSecsSinceEpoch() - program_start_time)));
+    ui->uptime_label->setText(QString("Uptime: %1").arg(timeSinceTimestamp(program_start_time)));
 
     // update piechart
     series->slices().at(PiechartIndex::ALL_FILES)->setValue(unique_files.length() - hashed_files);
@@ -120,13 +120,24 @@ void MainWindow::updateLoop100Ms() {
         slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
     }
 
+    if (scan_active) {
+        ui->time_passed_label->setText(QString("Time passed: %1").arg(timeSinceTimestamp(scan_start_time)));
+        if (averageDiskReadSpeed == 0 || files_size_all == 0){
+           ui->eta_label->setText("Eta: ???");
+        } else {
+           ui->eta_label->setText(QString("Eta: %1").arg(millisecondsToReadable(((files_size_all - files_size_scanned) / averageDiskReadSpeed) * 1000)));
+        }
+    }
+
 }
 
-void MainWindow::updateLoop3s() {
+void MainWindow::updateLoop2s() {
 
     // update disk usage
-    auto disk_read = getDiskReadSizeKb();
-    ui->disk_read_label->setText(QString("Disk read: %1/s").arg(kbToReadable((disk_read - lastMeasuredDiskRead) / 3.0)));
+    auto disk_read = getDiskReadSizeB();
+    ui->disk_read_label->setText(QString("Disk read: %1/s").arg(bytesToReadable((disk_read - lastMeasuredDiskRead) / 2.0)));
+    // floating average
+    averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
     lastMeasuredDiskRead = disk_read;
 
 }
@@ -173,6 +184,18 @@ void MainWindow::onStartScanButtonClicked() {
         return;
     }
 
+    // reset variables
+    hashed_files = 0;
+    files_size_all = 0;
+    files_size_scanned = 0;
+    unique_files.clear();
+
+    setUiDisabled(true);
+
+    scan_active = true;
+    scan_start_time = QDateTime::currentMSecsSinceEpoch();
+
+    // start separate vent loop so the main thread does not hang
     QEventLoop loop;
     QFutureWatcher<void> futureWatcher;
 
@@ -183,6 +206,8 @@ void MainWindow::onStartScanButtonClicked() {
     loop.exec();
     futureWatcher.waitForFinished();
 
+    setUiDisabled(false);
+    scan_active = false;
     setCurrentTask("Idle");
 }
 
@@ -231,6 +256,14 @@ void MainWindow::removeItemFromList(const QString& text, QListWidget* list) {
     }
 }
 
+void MainWindow::setListItemsDisabled(QListWidget* list, bool disable) {
+    for(int i = 0; i < list->count(); i++){
+        auto item = list->item(i);
+        auto itemWidget = widgetFromWidgetItem(item);
+        itemWidget->setDisabled(disable);
+    }
+}
+
 #pragma endregion}
 
 #pragma region MainWindow utility functions {
@@ -269,6 +302,26 @@ void MainWindow::setLastMessage(const QString &status) {
     }
 };
 
+void MainWindow::setUiDisabled(bool disabled) {
+
+    setListItemsDisabled(ui->extension_filter_list, disabled);
+    setListItemsDisabled(ui->slave_folders_list, disabled);
+    setListItemsDisabled(ui->folders_to_scan_list, disabled);
+
+    ui->mode_combo_box->setDisabled(disabled);
+
+    ui->add_extention_button->setDisabled(disabled);
+    ui->add_scan_folder_button->setDisabled(disabled);
+    ui->add_slave_folder_button->setDisabled(disabled);
+
+    ui->set_master_folder_button->setDisabled(disabled);
+    ui->set_dupes_folder_button->setDisabled(disabled);
+
+    ui->start_scan_button->setDisabled(disabled);
+    ui->extention_filter_enabled_checkbox->setDisabled(disabled);
+    ui->add_extention_button->setDisabled(ui->extention_filter_enabled_checkbox->checkState() == Qt::CheckState::Unchecked ? true : disabled);
+};
+
 #pragma endregion}
 
 #pragma region MainWindow duper functions {
@@ -284,7 +337,11 @@ void MainWindow::startScanAsync() {
     }
 
     // remove duplicates
-    unique_files.erase( std::unique(unique_files.begin(), unique_files.end() ), unique_files.end() );
+    unique_files.erase(std::unique(unique_files.begin(), unique_files.end() ), unique_files.end());
+
+    for(auto& file: unique_files) {
+        files_size_all += QFile(file.full_path).size();
+    }
 
     scan_modes.at(currentMode).called_function(this);
 }
@@ -300,6 +357,7 @@ void MainWindow::addEnumeratedFile(const QString& file) {
 void MainWindow::hashAllFiles() {
      for (auto& u_file: unique_files){
          hashed_files ++;
+         files_size_scanned += QFile(u_file.full_path).size();
          setCurrentTask(QString("Hashing file: %1").arg(u_file.full_path));
          u_file.hash = getFileHash(u_file.full_path);
      }

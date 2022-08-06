@@ -5,7 +5,7 @@
 
 #include <QString>
 #include <QStringList>
-#include <QDir>
+#include <QDate>
 #include <QFile>
 #include <QDirIterator>
 #include <QtDebug>
@@ -38,14 +38,14 @@ bool string_starts_with(const std::string& string, const std::string& prefix);
 
 bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list);
 
-unsigned long getDiskReadSizeKb();
+unsigned long getDiskReadSizeB();
 
-QString kbToReadable(unsigned long kb);
+QString bytesToReadable(unsigned long kb);
 
 #pragma endregion}
 
-
-
 QString millisecondsToReadable(unsigned long ms);
+
+QString timeSinceTimestamp(unsigned long ms);
 
 #endif // GUTILS_H

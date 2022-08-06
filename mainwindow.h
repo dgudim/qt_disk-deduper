@@ -4,7 +4,6 @@
 #include <QMainWindow>
 #include <QAction>
 #include <QTime>
-#include <QTime>
 #include <QFileDialog>
 #include <QListWidget>
 
@@ -68,10 +67,11 @@ private:
     Ui::MainWindow *ui;
 
     void updateLoop100Ms();
-    void updateLoop3s();
+    void updateLoop2s();
 
     void addItemToList(const QString& text, QListWidget* list);
     QListWidgetItem* getFromList(const QString& text, QListWidget* list);
+    void setListItemsDisabled(QListWidget* list, bool disable);
     FolderListItemWidget* widgetFromWidgetItem(QListWidgetItem *item);
 
     QString callFileDialogue(const QString& title, QFileDialog::Options options);
@@ -80,11 +80,15 @@ private:
     void displayWarning(const QString &message);
 
     void startScanAsync();
-
     void hashAllFiles();
 
-    unsigned long lastMeasuredDiskRead;
-    unsigned long program_start_time;
+    void setUiDisabled(bool state);
+
+    unsigned long lastMeasuredDiskRead = 0;
+    float averageDiskReadSpeed = 0;
+    unsigned long program_start_time = 0;
+    unsigned long scan_start_time = 0;
+    bool scan_active = false;
 
     int currentMode;
 
@@ -95,6 +99,8 @@ private:
 
     QVector<File> unique_files;
     unsigned int hashed_files = 0;
+    unsigned long files_size_all = 0;
+    unsigned long files_size_scanned = 0;
 
     QStringList directories_to_scan;
     QMap<QString, QVector<QString>> dupes;

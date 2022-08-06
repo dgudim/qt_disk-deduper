@@ -33,6 +33,11 @@ QString FolderListItemWidget::getText() {
     return ui->folderNameLabel->text();
 }
 
+void FolderListItemWidget::setDisabled(bool disabled) {
+    ui->deleteButton->setDisabled(disabled);
+    ui->exclusionButton->setDisabled(disabled);
+}
+
 bool FolderListItemWidget::isWhitelisted() {
     return whitelisted;
 }
