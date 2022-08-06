@@ -4,18 +4,48 @@
 #include <chrono>
 
 #include <QString>
+#include <QStringList>
+#include <QDir>
+#include <QFile>
+#include <QDirIterator>
+#include <QtDebug>
 
-QString millisecondsToReadable(unsigned long ms) {
-    using namespace std::chrono;
-    QString time_str = "%1h %2m %3s";
-    int seconds = ms / 1000;
-    int minutes = seconds / 60;
-    int hours = minutes / 60;
+#include <functional>
+#include <fstream>
+#include <sstream>
+#include <string>
 
-    seconds = seconds % 60;
-    minutes = minutes % 60;
+#include <QCryptographicHash>
 
-    return time_str.arg(hours).arg(minutes).arg(seconds);
-}
+
+#pragma region File utils {
+
+struct File {
+    QString full_path;
+    QString name;
+    QString hash = "";
+
+    bool operator==(const File &other) const{
+        return full_path == other.full_path;
+    }
+};
+
+void walkDir(const QString& dir, std::function<void(QString)> callback);
+
+QString getFileHash(const QString& full_path);
+
+bool string_starts_with(const std::string& string, const std::string& prefix);
+
+bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list);
+
+unsigned long getDiskReadSizeKb();
+
+QString kbToReadable(unsigned long kb);
+
+#pragma endregion}
+
+
+
+QString millisecondsToReadable(unsigned long ms);
 
 #endif // GUTILS_H

@@ -1,4 +1,4 @@
-QT       += core gui charts
+QT       += core gui charts concurrent
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -12,11 +12,11 @@ QMAKE_CXXFLAGS_WARN_ON += -Wno-unknown-pragmas
 
 SOURCES += \
     folder_list_item.cpp \
+    gutils.cpp \
     main.cpp \
     mainwindow.cpp
 
 HEADERS += \
-    file_utils.h \
     folder_list_item.h \
     gutils.h \
     mainwindow.h

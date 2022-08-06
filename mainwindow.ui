@@ -233,8 +233,17 @@
         </item>
         <item>
          <widget class="QLabel" name="last_output_label">
+          <property name="minimumSize">
+           <size>
+            <width>300</width>
+            <height>100</height>
+           </size>
+          </property>
           <property name="text">
-           <string>Last Output:</string>
+           <string>Last output:</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
           </property>
           <property name="wordWrap">
            <bool>true</bool>
@@ -252,7 +261,7 @@
           <property name="minimumSize">
            <size>
             <width>300</width>
-            <height>150</height>
+            <height>100</height>
            </size>
           </property>
           <property name="maximumSize">

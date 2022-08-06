@@ -1,22 +1,18 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-#include "gutils.h"
-#include "file_utils.h"
+enum PiechartIndex {
+    ALL_FILES = 0,
+    SCANNED_FILES = 1,
+    DUPLICATE_FILES = 2
+};
 
-#include <QtConcurrent/QtConcurrent>
-#include <QDateTime>
-#include <QMessageBox>
-#include <QtDebug>
-
-#include <functional>
-
-QMap<QString, QColor> piechart_map = {
+QVector<QPair<QString, QColor>> piechart_config = {
     {"A: %1", QColor(1, 184, 170)},
     {"Sc: %1", QColor(3, 171, 51)},
     {"Dup: %1", QColor(181, 113, 4)}};
 
-enum scanMode {
+enum ScanMode {
     HASH_COMPARE = 0,
     NAME_COMPARE = 1,
     AUTO_DEDUPE_MOVE = 2,
@@ -25,13 +21,13 @@ enum scanMode {
     SHOW_STATS = 5
 };
 
-struct scanModeProperties {
+struct ScanModeProperties {
     QString name;
     QString description;
     std::function<void(MainWindow*)> called_function;
 };
 
-QList<scanModeProperties> scan_modes = {
+QList<ScanModeProperties> scan_modes = {
     {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare},
     {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare},
     {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove},
@@ -54,18 +50,16 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
         modeNames.push_back(mode_name);
     }
     ui->mode_combo_box->insertItems(0, modeNames);
-    ui->mode_combo_box->setCurrentIndex(scanMode::HASH_COMPARE);
-    onCurrentModeChanged(scanMode::HASH_COMPARE);
+    ui->mode_combo_box->setCurrentIndex(ScanMode::HASH_COMPARE);
+    onCurrentModeChanged(ScanMode::HASH_COMPARE);
 
     // setup piechart
     series = new QPieSeries();
 
-    QList<QString> keys = piechart_map.keys();
-    for (auto& key: keys){
-        auto slice = series->append(key, 3);
-        slice->setBrush(QBrush(piechart_map[key]));
+    for (auto& [label, color]: piechart_config){
+        auto slice = series->append("", 0);
+        slice->setBrush(QBrush(color));
         slice->setLabelBrush(QBrush(Qt::white));
-        slice->setLabel(QString(key).arg(slice->value()));
     }
 
     series->setLabelsVisible(true);
@@ -106,9 +100,6 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     connect(ui->extention_filter_enabled_checkbox, SIGNAL(stateChanged(int)), this, SLOT(onExtentionCheckboxStateChanged(int)));
 
     connect(ui->start_scan_button, SIGNAL(clicked()), this, SLOT(onStartScanButtonClicked()));
-
-    // connect 2 functions through a slot for thread safe ui change
-    connect(this, SIGNAL(requestCurrentTaskChange(QString)), this, SLOT(setCurrentTask(QString)));
 }
 
 MainWindow::~MainWindow() {
@@ -122,10 +113,13 @@ void MainWindow::updateLoop100Ms() {
     ui->uptime_label->setText(QString("Uptime: %1").arg(millisecondsToReadable(QDateTime::currentMSecsSinceEpoch() - program_start_time)));
 
     // update piechart
-    QList<QString> keys = piechart_map.keys();
-    for (int i = 0; i < keys.length(); i++){
-        series->slices().at(i)->setValue(2);
+    series->slices().at(PiechartIndex::ALL_FILES)->setValue(unique_files.length() - hashed_files);
+    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(hashed_files);
+    for (int i = 0; i < series->count(); i++){
+        auto slice = series->slices().at(i);
+        slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
     }
+
 }
 
 void MainWindow::updateLoop3s() {
@@ -174,7 +168,22 @@ void MainWindow::onCurrentModeChanged(int curr_mode) {
 }
 
 void MainWindow::onStartScanButtonClicked() {
-    scan_modes.at(currentMode).called_function(this);
+    if(ui->folders_to_scan_list->count() == 0) {
+        displayWarning("Nothing to scan, please add folders");
+        return;
+    }
+
+    QEventLoop loop;
+    QFutureWatcher<void> futureWatcher;
+
+    connect(&futureWatcher, SIGNAL(finished()), &loop, SLOT(quit()));
+
+    futureWatcher.setFuture(QtConcurrent::run(this, &MainWindow::startScanAsync));
+
+    loop.exec();
+    futureWatcher.waitForFinished();
+
+    setCurrentTask("Idle");
 }
 
 #pragma endregion}
@@ -245,20 +254,59 @@ void MainWindow::displayWarning(const QString &message){
 }
 
 void MainWindow::setCurrentTask(const QString &status){
-    ui->current_task_label->setText(QString("Current task: %1").arg(status));
+    if(QThread::currentThread() == this->thread()) {
+        ui->current_task_label->setText(QString("Current task: %1").arg(status));
+    } else {
+        QMetaObject::invokeMethod(this, [this, status]{ui->current_task_label->setText(QString("Current task: %1").arg(status));});
+    }
 }
+
+void MainWindow::setLastMessage(const QString &status) {
+    if(QThread::currentThread() == this->thread()) {
+     ui->last_output_label->setText(QString("Last output: %1").arg(status));
+    } else {
+       QMetaObject::invokeMethod(this, [this, status]{ ui->last_output_label->setText(QString("Last output: %1").arg(status));});
+    }
+};
 
 #pragma endregion}
 
 #pragma region MainWindow duper functions {
 
+void MainWindow::startScanAsync() {
+
+    QStringList folders_to_enumerate;
+    for(int i = 0; i < ui->folders_to_scan_list->count(); i++){
+        auto item = ui->folders_to_scan_list->item(i);
+        auto itemWidget = widgetFromWidgetItem(item);
+        walkDir(itemWidget->getText(), [this](QString file) {
+            addEnumeratedFile(file);});
+    }
+
+    // remove duplicates
+    unique_files.erase( std::unique(unique_files.begin(), unique_files.end() ), unique_files.end() );
+
+    scan_modes.at(currentMode).called_function(this);
+}
+
+void MainWindow::addEnumeratedFile(const QString& file) {
+    QFile file_r = file;
+    if(unique_files.size() % 100 == 0) {
+        setCurrentTask(QString("Enumerating file: %1").arg(file));
+    }
+    unique_files.push_back({file, file_r.fileName()});
+};
+
+void MainWindow::hashAllFiles() {
+     for (auto& u_file: unique_files){
+         hashed_files ++;
+         setCurrentTask(QString("Hashing file: %1").arg(u_file.full_path));
+         u_file.hash = getFileHash(u_file.full_path);
+     }
+}
+
 void MainWindow::hashCompare() {
-    QFuture<QStringList> future = QtConcurrent::run(&walkDir, QString("/"),
-                                                    [this](QString file) {
-            emit requestCurrentTaskChange(QString("Enumerating file: %1").arg(file));
-});
-
-
+    hashAllFiles();
 }
 
 void MainWindow::nameCompare() {

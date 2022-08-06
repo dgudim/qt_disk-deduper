@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QAction>
 #include <QTime>
+#include <QTime>
 #include <QFileDialog>
 #include <QListWidget>
 
@@ -12,7 +13,17 @@
 #include <QPieSeries>
 #include <QPieSlice>
 
+#include <QtConcurrent/QtConcurrent>
+#include <QThread>
+#include <QMetaMethod>
+#include <QDateTime>
+#include <QMessageBox>
+#include <QtDebug>
+
+#include <functional>
+
 #include "folder_list_item.h"
+#include "gutils.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -47,9 +58,11 @@ private slots:
     void onExtentionCheckboxStateChanged(int arg1);
 
     void removeItemFromList(const QString& text, QListWidget* list);
+
+    void addEnumeratedFile(const QString& file);
+
     void setCurrentTask(const QString &status);
-signals:
-    void requestCurrentTaskChange(const QString& new_title);
+    void setLastMessage(const QString &status);
 
 private:
     Ui::MainWindow *ui;
@@ -66,8 +79,9 @@ private:
 
     void displayWarning(const QString &message);
 
+    void startScanAsync();
 
-
+    void hashAllFiles();
 
     unsigned long lastMeasuredDiskRead;
     unsigned long program_start_time;
@@ -79,12 +93,11 @@ private:
     QString masterFolder;
     QString dupesFolder;
 
-    QStringList all_files;
-    QStringList all_file_hashes;
-    unsigned int scanned_files;
+    QVector<File> unique_files;
+    unsigned int hashed_files = 0;
 
     QStringList directories_to_scan;
-    QMap<QString, QList<QString>> dupes;
+    QMap<QString, QVector<QString>> dupes;
 
 };
 #endif // MAINWINDOW_H
