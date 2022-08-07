@@ -14,16 +14,20 @@ SOURCES += \
     folder_list_item.cpp \
     gutils.cpp \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    stats_dialog.cpp
 
 HEADERS += \
+    datatypes.h \
     folder_list_item.h \
     gutils.h \
-    mainwindow.h
+    mainwindow.h \
+    stats_dialog.h
 
 FORMS += \
     folder_list_item.ui \
-    mainwindow.ui
+    mainwindow.ui \
+    stats_dialog.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

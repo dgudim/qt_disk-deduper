@@ -24,16 +24,19 @@ enum ScanMode {
 struct ScanModeProperties {
     QString name;
     QString description;
-    std::function<void(MainWindow*)> called_function;
+    std::function<void(MainWindow*)> process_function;
+    std::function<void(MainWindow*)> display_function;
 };
 
 QList<ScanModeProperties> scan_modes = {
-    {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare},
-    {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare},
-    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove},
-    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename},
-    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename},
-    {"Show statistics", "Get statistics of selected folders (Extensions, camera models, empty folders) and write them into a text file", &MainWindow::showStats}};
+    {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::hashCompare_display},
+    {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::nameCompare_display},
+    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupeMove_display},
+    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupeRename_display},
+    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, &MainWindow::exifRename_display},
+    {"Show statistics", "Get statistics of selected folders (Extensions, camera models, empty folders) and write them into a text file", &MainWindow::showStats, &MainWindow::showStats_display}};
+
+#define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this, func, Qt::QueuedConnection, __VA_ARGS__);
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
 
@@ -46,7 +49,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     setCurrentTask("Idle");
 
     QStringList modeNames;
-    for(auto& [mode_name, mode_description, func]: scan_modes){
+    for(auto& [mode_name, mode_description, pfunc, dfunc]: scan_modes){
         modeNames.push_back(mode_name);
     }
     ui->mode_combo_box->insertItems(0, modeNames);
@@ -140,6 +143,9 @@ void MainWindow::updateLoop2s() {
     averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
     lastMeasuredDiskRead = disk_read;
 
+    // update memory usage
+    ui->memory_usage_label->setText(QString("Memory usage: %1").arg(bytesToReadable(getMemUsedKb() * 1024)));
+
 }
 
 #pragma endregion}
@@ -195,16 +201,21 @@ void MainWindow::onStartScanButtonClicked() {
     scan_active = true;
     scan_start_time = QDateTime::currentMSecsSinceEpoch();
 
-    // start separate vent loop so the main thread does not hang
+    // start separate event loop so the main thread does not hang
     QEventLoop loop;
     QFutureWatcher<void> futureWatcher;
 
-    connect(&futureWatcher, SIGNAL(finished()), &loop, SLOT(quit()));
+    // QueuedConnection is necessary in case the signal finished is emitted before the loop starts (if the task is already finished when setFuture is called)
+    connect(&futureWatcher, SIGNAL(finished()), &loop, SLOT(quit()), Qt::QueuedConnection);
 
     futureWatcher.setFuture(QtConcurrent::run(this, &MainWindow::startScanAsync));
 
+    // process heavy stuff in a separate thread
     loop.exec();
     futureWatcher.waitForFinished();
+
+    // display results in main thread
+    scan_modes.at(currentMode).display_function(this);
 
     setUiDisabled(false);
     scan_active = false;
@@ -287,18 +298,18 @@ void MainWindow::displayWarning(const QString &message){
 }
 
 void MainWindow::setCurrentTask(const QString &status){
-    if(QThread::currentThread() == this->thread()) {
+    if(QThread::currentThread() == thread()) {
         ui->current_task_label->setText(QString("Current task: %1").arg(status));
     } else {
-        QMetaObject::invokeMethod(this, [this, status]{ui->current_task_label->setText(QString("Current task: %1").arg(status));});
+        MOVE_TO_UI_THREAD("setCurrentTask", Q_ARG(QString, status));
     }
 }
 
 void MainWindow::setLastMessage(const QString &status) {
-    if(QThread::currentThread() == this->thread()) {
-     ui->last_output_label->setText(QString("Last output: %1").arg(status));
+    if(QThread::currentThread() == thread()) {
+       ui->last_output_label->setText(QString("Last output: %1").arg(status));
     } else {
-       QMetaObject::invokeMethod(this, [this, status]{ ui->last_output_label->setText(QString("Last output: %1").arg(status));});
+       MOVE_TO_UI_THREAD("setLastMessage", Q_ARG(QString, status));
     }
 };
 
@@ -343,7 +354,7 @@ void MainWindow::startScanAsync() {
         files_size_all += QFile(file.full_path).size();
     }
 
-    scan_modes.at(currentMode).called_function(this);
+    scan_modes.at(currentMode).process_function(this);
 }
 
 void MainWindow::addEnumeratedFile(const QString& file) {
@@ -372,11 +383,11 @@ void MainWindow::nameCompare() {
 }
 
 void MainWindow::autoDedupeMove() {
-
+    hashAllFiles();
 }
 
 void MainWindow::autoDedupeRename() {
-
+    hashAllFiles();
 }
 
 void MainWindow::exifRename() {
@@ -385,6 +396,33 @@ void MainWindow::exifRename() {
 
 void MainWindow::showStats() {
 
+}
+
+void MainWindow::hashCompare_display() {
+
+}
+
+void MainWindow::nameCompare_display() {
+
+}
+
+void MainWindow::autoDedupeMove_display() {
+
+}
+
+void MainWindow::autoDedupeRename_display() {
+
+}
+
+void MainWindow::exifRename_display() {
+
+}
+
+void MainWindow::showStats_display() {
+    stats_dialog = new Stats_dialog(this);
+    stats_dialog->setModal(true);
+    hide();
+    stats_dialog->show();
 }
 
 #pragma endregion}

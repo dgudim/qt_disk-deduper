@@ -21,6 +21,7 @@
 
 #include <functional>
 
+#include "stats_dialog.h"
 #include "folder_list_item.h"
 #include "gutils.h"
 
@@ -41,6 +42,13 @@ public:
     void autoDedupeRename();
     void exifRename();
     void showStats();
+
+    void hashCompare_display();
+    void nameCompare_display();
+    void autoDedupeMove_display();
+    void autoDedupeRename_display();
+    void exifRename_display();
+    void showStats_display();
 
 private slots:
     void onAddScanFolderClicked();
@@ -65,6 +73,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
+    Stats_dialog *stats_dialog;
 
     void updateLoop100Ms();
     void updateLoop2s();
@@ -84,10 +93,10 @@ private:
 
     void setUiDisabled(bool state);
 
-    unsigned long lastMeasuredDiskRead = 0;
+    quint64 lastMeasuredDiskRead = 0;
     float averageDiskReadSpeed = 0;
-    unsigned long program_start_time = 0;
-    unsigned long scan_start_time = 0;
+    quint64 program_start_time = 0;
+    quint64 scan_start_time = 0;
     bool scan_active = false;
 
     int currentMode;
@@ -98,12 +107,12 @@ private:
     QString dupesFolder;
 
     QVector<File> unique_files;
-    unsigned int hashed_files = 0;
-    unsigned long files_size_all = 0;
-    unsigned long files_size_scanned = 0;
+    quint32 hashed_files = 0; // max 4294967295
+    quint64 files_size_all = 0;
+    quint64 files_size_scanned = 0;
 
     QStringList directories_to_scan;
-    QMap<QString, QVector<QString>> dupes;
+    QObject scan_results;
 
 };
 #endif // MAINWINDOW_H

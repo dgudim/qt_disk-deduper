@@ -34,18 +34,20 @@ void walkDir(const QString& dir, std::function<void(QString)> callback);
 
 QString getFileHash(const QString& full_path);
 
-bool string_starts_with(const std::string& string, const std::string& prefix);
+bool stringStartsWith(const std::string& string, const std::string& prefix);
 
 bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list);
 
-unsigned long getDiskReadSizeB();
+quint64 getDiskReadSizeB();
 
-QString bytesToReadable(unsigned long kb);
+quint64 getMemUsedKb();
+
+QString bytesToReadable(quint64 kb);
 
 #pragma endregion}
 
-QString millisecondsToReadable(unsigned long ms);
+QString millisecondsToReadable(quint64 ms);
 
-QString timeSinceTimestamp(unsigned long ms);
+QString timeSinceTimestamp(quint64 ms);
 
 #endif // GUTILS_H
