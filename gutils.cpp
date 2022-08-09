@@ -2,9 +2,11 @@
 
 #pragma region File utils {
 
+QMap<QString, quint64> size_multipliers = {{"b", 1}, {"Kb", 1024}, {"Mb", 1048576}, {"Gb", 1073741824}};
+
 void walkDir(const QString& dir, std::function<void(QString)> callback) {
     QDirIterator it(dir, QStringList() << "*.*", QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()){
+    while (it.hasNext()) {
         callback(it.next());
     }
 }
@@ -134,9 +136,14 @@ QString bytesToReadable(quint64 b) {
     return QString("%1 b").arg(b);
 }
 
+quint64 readableToBytes(QString str) {
+    QStringList split = str.split(" ");
+    return split[0].toDouble() * size_multipliers[split[1]];
+}
+
 #pragma endregion}
 
-QString millisecondsToReadable(qint64 ms) {
+QString millisecondsToReadable(quint64 ms) {
     using namespace std::chrono;
     QString time_str = "%1h %2m %3s";
     int seconds = ms / 1000;
@@ -149,7 +156,6 @@ QString millisecondsToReadable(qint64 ms) {
     return time_str.arg(hours).arg(minutes).arg(seconds);
 }
 
-QString timeSinceTimestamp(qint64 ms) {
+QString timeSinceTimestamp(quint64 ms) {
     return millisecondsToReadable(QDateTime::currentMSecsSinceEpoch() - ms);
 };
-

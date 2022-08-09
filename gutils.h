@@ -17,18 +17,7 @@
 
 #include <QCryptographicHash>
 
-
 #pragma region File utils {
-
-struct File {
-    QString full_path;
-    QString name;
-    QString hash = "";
-
-    bool operator==(const File &other) const{
-        return full_path == other.full_path;
-    }
-};
 
 void walkDir(const QString& dir, std::function<void(QString)> callback);
 
@@ -43,6 +32,8 @@ quint64 getDiskReadSizeB();
 quint64 getMemUsedKb();
 
 QString bytesToReadable(quint64 kb);
+
+quint64 readableToBytes(QString str);
 
 #pragma endregion}
 

@@ -38,6 +38,7 @@ QList<ScanModeProperties> scan_modes = {
 
 #define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this, func, Qt::QueuedConnection, __VA_ARGS__);
 
+
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
 
     ui->setupUi(this);
@@ -116,8 +117,8 @@ void MainWindow::updateLoop100Ms() {
     ui->uptime_label->setText(QString("Uptime: %1").arg(timeSinceTimestamp(program_start_time)));
 
     // update piechart
-    series->slices().at(PiechartIndex::ALL_FILES)->setValue(unique_files.length() - hashed_files);
-    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(hashed_files);
+    series->slices().at(PiechartIndex::ALL_FILES)->setValue(unique_files.length() - processed_files);
+    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files);
     for (int i = 0; i < series->count(); i++){
         auto slice = series->slices().at(i);
         slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
@@ -128,7 +129,7 @@ void MainWindow::updateLoop100Ms() {
         if (averageDiskReadSpeed == 0 || files_size_all == 0){
            ui->eta_label->setText("Eta: ???");
         } else {
-           ui->eta_label->setText(QString("Eta: %1").arg(millisecondsToReadable(((files_size_all - files_size_scanned) / averageDiskReadSpeed) * 1000)));
+           ui->eta_label->setText(QString("Eta: %1").arg(millisecondsToReadable(((files_size_all - files_size_processed) / averageDiskReadSpeed) * 1000)));
         }
     }
 
@@ -191,9 +192,9 @@ void MainWindow::onStartScanButtonClicked() {
     }
 
     // reset variables
-    hashed_files = 0;
+    processed_files = 0;
     files_size_all = 0;
-    files_size_scanned = 0;
+    files_size_processed = 0;
     unique_files.clear();
 
     setUiDisabled(true);
@@ -339,7 +340,6 @@ void MainWindow::setUiDisabled(bool disabled) {
 
 void MainWindow::startScanAsync() {
 
-    QStringList folders_to_enumerate;
     for(int i = 0; i < ui->folders_to_scan_list->count(); i++){
         auto item = ui->folders_to_scan_list->item(i);
         auto itemWidget = widgetFromWidgetItem(item);
@@ -348,7 +348,8 @@ void MainWindow::startScanAsync() {
     }
 
     // remove duplicates
-    unique_files.erase(std::unique(unique_files.begin(), unique_files.end() ), unique_files.end());
+    std::sort(unique_files.begin(), unique_files.end());
+    unique_files.erase(std::unique(unique_files.begin(), unique_files.end()), unique_files.end());
 
     for(auto& file: unique_files) {
         files_size_all += QFile(file.full_path).size();
@@ -359,18 +360,19 @@ void MainWindow::startScanAsync() {
 
 void MainWindow::addEnumeratedFile(const QString& file) {
     QFile file_r = file;
+    QFileInfo fileInfo(file);
     if(unique_files.size() % 100 == 0) {
         setCurrentTask(QString("Enumerating file: %1").arg(file));
     }
-    unique_files.push_back({file, file_r.fileName()});
+    unique_files.push_back({file, fileInfo.fileName(), fileInfo.suffix().toLower(), file_r.size()});
 };
 
 void MainWindow::hashAllFiles() {
      for (auto& u_file: unique_files){
-         hashed_files ++;
-         files_size_scanned += QFile(u_file.full_path).size();
+         processed_files ++;
+         files_size_processed += u_file.size_bytes;
          setCurrentTask(QString("Hashing file: %1").arg(u_file.full_path));
-         u_file.hash = getFileHash(u_file.full_path);
+         u_file.computeHash();
      }
 }
 
@@ -396,6 +398,55 @@ void MainWindow::exifRename() {
 
 void MainWindow::showStats() {
 
+    QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
+
+    ExifTool *ex_tool = new ExifTool();
+
+    QList<QString> metadata_keys;
+    if (!unique_files.empty()) {
+        unique_files[0].loadMetadata(ex_tool);
+        metadata_keys = unique_files[0].metadata.keys();
+        // metadata_key = extensions / camera_model / etc
+        for (auto& metadata_key: metadata_keys) {
+            meta_fields_stats.append({metadata_key, {}});
+        }
+    }
+    for(auto& file: unique_files) {
+
+        setCurrentTask(QString("Gathering information about: %1").arg(file.full_path));
+
+        // load file metadata using exiftool
+        file.loadMetadata(ex_tool);
+
+        // iterate through name-array pairs
+        for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
+            QString& metadata_value = file.metadata[metadata_key];
+
+            // if value is already present (for instance extension "png") add to it, othrewise append
+            if (metadata_array.contains(metadata_value)) {
+                Countable_qstring& temp = metadata_array[metadata_array.indexOf(metadata_value)];
+                temp.count ++;
+                temp.total_size_bytes += file.size_bytes;
+            } else {
+                metadata_array.append({metadata_value, 1, file.size_bytes});
+            }
+        }
+
+        processed_files ++;
+        files_size_processed += file.size_bytes;
+    }
+
+    delete ex_tool;
+
+    // calculate relative percentages for all meta fileds
+    for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
+        for (auto& metadata_value: metadata_array) {
+            metadata_value.count_percentage = metadata_value.count / (double)unique_files.length() * 100;
+            metadata_value.size_percentage = metadata_value.total_size_bytes / (long double)files_size_all * 100;
+        }
+    }
+
+    stat_results = {meta_fields_stats, unique_files.length(), files_size_all};
 }
 
 void MainWindow::hashCompare_display() {
@@ -419,7 +470,7 @@ void MainWindow::exifRename_display() {
 }
 
 void MainWindow::showStats_display() {
-    stats_dialog = new Stats_dialog(this);
+    stats_dialog = new Stats_dialog(this, stat_results);
     stats_dialog->setModal(true);
     hide();
     stats_dialog->show();

@@ -23,7 +23,6 @@
 
 #include "stats_dialog.h"
 #include "folder_list_item.h"
-#include "gutils.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -93,12 +92,12 @@ private:
 
     void setUiDisabled(bool state);
 
+    // status variables
     quint64 lastMeasuredDiskRead = 0;
     float averageDiskReadSpeed = 0;
     quint64 program_start_time = 0;
     quint64 scan_start_time = 0;
     bool scan_active = false;
-
     int currentMode;
 
     QPieSeries *series;
@@ -106,13 +105,16 @@ private:
     QString masterFolder;
     QString dupesFolder;
 
+    // general variables
     QVector<File> unique_files;
-    quint32 hashed_files = 0; // max 4294967295
+    quint32 processed_files = 0; // max 4294967295
     quint64 files_size_all = 0;
-    quint64 files_size_scanned = 0;
+    quint64 files_size_processed = 0;
 
     QStringList directories_to_scan;
-    QObject scan_results;
+
+    // metadata extraction
+    StatsContainer stat_results;
 
 };
 #endif // MAINWINDOW_H
