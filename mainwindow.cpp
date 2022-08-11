@@ -45,6 +45,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     ui->setupUi(this);
 
+    ex_tool = new ExifTool();
     this_window = this;
 
     // setup initial values
@@ -111,6 +112,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 }
 
 MainWindow::~MainWindow() {
+  delete ex_tool;
   delete ui;
 }
 
@@ -408,8 +410,6 @@ void MainWindow::showStats() {
 
     QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
 
-    ExifTool *ex_tool = new ExifTool();
-
     if (!unique_files.empty()) {
         for (auto& metadata_key: selectedMetaFields) {
             meta_fields_stats.append({metadata_key, {}});
@@ -421,8 +421,7 @@ void MainWindow::showStats() {
         setCurrentTask(QString("Gathering information about: %1").arg(file.full_path));
 
         // load metadata
-        //file.loadMetadata(ex_tool);
-        this->thread()->msleep(10);
+        file.loadMetadata(ex_tool);
 
         // iterate through name-array pairs
         for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
@@ -441,8 +440,6 @@ void MainWindow::showStats() {
         processed_files ++;
         files_size_processed += file.size_bytes;
     }
-
-    delete ex_tool;
 
     // calculate relative percentages for all meta fileds
     for (auto& [metadata_key, metadata_array]: meta_fields_stats) {

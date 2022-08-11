@@ -79,8 +79,6 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-    Stats_dialog *stats_dialog;
-    Metadata_selection_dialogue *selection_dialogue;
 
     void updateLoop100Ms();
     void updateLoop2s();
@@ -126,6 +124,9 @@ private:
     // metadata extraction
     StatsContainer stat_results;
     QVector<QString> selectedMetaFields;
+    Stats_dialog *stats_dialog;
+    Metadata_selection_dialogue *selection_dialogue;
+    ExifTool *ex_tool;
 
 };
 #endif // MAINWINDOW_H
