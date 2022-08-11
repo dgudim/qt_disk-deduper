@@ -36,7 +36,7 @@ QMap<QString, QVector<QPair<QString, std::function<void(QString&)>>>> metadataMa
 QMap<QString, QPair<QString, std::function<void(QString&)>>> metadataMap_field_to_name;
 QList<QString> fieldList = metadataMap_name_to_fileds.keys();
 
-void File::loadMetadata(ExifTool *ex_tool) {
+void File::loadMetadata(ExifTool *ex_tool, const QVector<QString>& selectedMetaFields) {
 
     if(metadata_loaded){
         return;
@@ -70,7 +70,7 @@ void File::loadMetadata(ExifTool *ex_tool) {
         qCritical() << "Error executing exiftool on " + full_path;
     }
 
-    for(auto& out_field: fieldList) {
+    for(auto& out_field: selectedMetaFields) {
         // iterate thrugh all suitable fields
         for(auto& meta_field_and_converter: metadataMap_name_to_fileds[out_field]) {
             // check if if was returned by exiftool and is not considered empty

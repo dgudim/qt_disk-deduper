@@ -222,14 +222,28 @@
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="disk_read_label">
-          <property name="text">
-           <string>Disk read:</string>
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <property name="topMargin">
+           <number>0</number>
           </property>
-          <property name="wordWrap">
-           <bool>true</bool>
-          </property>
-         </widget>
+          <item>
+           <widget class="QLabel" name="items_per_sec_label">
+            <property name="text">
+             <string>Items per sec:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="disk_read_label">
+            <property name="text">
+             <string>Disk read:</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
         <item>
          <widget class="QLabel" name="uptime_label">
@@ -307,8 +321,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>344</width>
-             <height>70</height>
+             <width>358</width>
+             <height>192</height>
             </rect>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_6">
@@ -347,7 +361,7 @@
      <item>
       <widget class="QPushButton" name="add_scan_folder_button">
        <property name="text">
-        <string>Add a folder to scan</string>
+        <string>Add folders to scan</string>
        </property>
       </widget>
      </item>
@@ -416,7 +430,7 @@
      <item>
       <widget class="QPushButton" name="add_slave_folder_button">
        <property name="text">
-        <string>Add slave folder</string>
+        <string>Add slave folders</string>
        </property>
       </widget>
      </item>

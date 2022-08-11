@@ -30,6 +30,12 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+enum EtaMode {
+    DISABLED,
+    SPEED_BASED,
+    ITEM_BASED
+};
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -73,7 +79,7 @@ private slots:
     void onAddExtensionButtonClicked();
     void onExtentionCheckboxStateChanged(int arg1);
 
-    void removeItemFromList(const QString& text, QListWidget* list);
+    void removeItemFromList(const QString &text, QListWidget *list);
 
     void setCurrentTask(const QString &status);
 
@@ -83,13 +89,15 @@ private:
     void updateLoop100Ms();
     void updateLoop2s();
 
-    void addItemToList(const QString& text, QListWidget* list);
+    void addItemsToList(const QString &text, QListWidget *list);
+    void addItemsToList(const QStringList &items, QListWidget *list);
 
     QListWidgetItem* getFromList(const QString& text, QListWidget* list);
     void setListItemsDisabled(QListWidget* list, bool disable);
     FolderListItemWidget* widgetFromWidgetItem(QListWidgetItem *item);
 
-    QString callFileDialogue(const QString& title, QFileDialog::Options options);
+    QString callDirSelectionDialogue(const QString &title);
+    QStringList callMultiDirSelectionDialogue();
     QString callTextDialogue(const QString &title, const QString &prompt);
 
     void addEnumeratedFile(const QString& file);
@@ -106,7 +114,13 @@ private:
     quint64 program_start_time = 0;
     quint64 scan_start_time = 0;
     bool scan_active = false;
+    EtaMode etaMode = DISABLED;
     int currentMode;
+    quint32 processed_files = 0; // max 4294967295
+    quint32 previous_processed_files = 0; // for measuring speed
+    float averageFilesPerSecond = 0;
+    quint64 files_size_all = 0;
+    quint64 files_size_processed = 0;
 
     QPieSeries *series;
 
@@ -114,10 +128,8 @@ private:
     QString dupesFolder;
 
     // general variables
+    QVector<QString> excluded_files;
     QVector<File> unique_files;
-    quint32 processed_files = 0; // max 4294967295
-    quint64 files_size_all = 0;
-    quint64 files_size_processed = 0;
 
     QStringList directories_to_scan;
 
@@ -128,5 +140,8 @@ private:
     Metadata_selection_dialogue *selection_dialogue;
     ExifTool *ex_tool;
 
+    // utility functions
+    template<typename T>
+    void removeDuplicates(T &arr);
 };
 #endif // MAINWINDOW_H

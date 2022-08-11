@@ -144,7 +144,7 @@ quint64 readableToBytes(QString str) {
 #pragma endregion}
 
 QString millisecondsToReadable(quint64 ms) {
-    using namespace std::chrono;
+
     QString time_str = "%1h %2m %3s";
     int seconds = ms / 1000;
     int minutes = seconds / 60;

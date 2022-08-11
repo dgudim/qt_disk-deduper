@@ -59,7 +59,7 @@ struct File {
         metadata.insert("extension", extension);
     }
 
-    void loadMetadata(ExifTool *ex_tool);
+    void loadMetadata(ExifTool *ex_tool, const QVector<QString>& selectedMetaFields);
 
     void computeHash() {
         hash = getFileHash(full_path);

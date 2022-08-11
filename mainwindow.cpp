@@ -130,26 +130,34 @@ void MainWindow::updateLoop100Ms() {
         slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
     }
 
-    if (scan_active) {
+    if (etaMode != DISABLED) {
         ui->time_passed_label->setText(QString("Time passed: %1").arg(timeSinceTimestamp(scan_start_time)));
-        if (averageDiskReadSpeed == 0 || files_size_all == 0){
-           ui->eta_label->setText("Eta: ???");
+
+        float averagePerSec = etaMode == SPEED_BASED ? averageDiskReadSpeed : averageFilesPerSecond;
+
+        if (averagePerSec == 0){
+           ui->eta_label->setText("Eta: ∞");
         } else {
-           ui->eta_label->setText(QString("Eta: %1").arg(millisecondsToReadable(((files_size_all - files_size_processed) / averageDiskReadSpeed) * 1000)));
+            quint64 left = etaMode == SPEED_BASED ? (files_size_all - files_size_processed) : (unique_files.length() - processed_files);
+            ui->eta_label->setText(QString("Eta: %1").arg(millisecondsToReadable(left / averagePerSec * 1000)));
         }
     }
-
 }
 
 void MainWindow::updateLoop2s() {
 
     // update disk usage
     auto disk_read = getDiskReadSizeB();
-    ui->disk_read_label->setText(QString("Disk read: %1/s").arg(bytesToReadable((disk_read - lastMeasuredDiskRead) / 2.0)));
 
     // floating average
     averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
     lastMeasuredDiskRead = disk_read;
+
+    averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((processed_files - previous_processed_files) / 2.0) * 0.1;
+    previous_processed_files = processed_files;
+
+    ui->disk_read_label->setText(QString("Disk read: %1/s").arg(bytesToReadable(averageDiskReadSpeed)));
+    ui->items_per_sec_label->setText(QString("Items per sec: %1/s").arg(averageFilesPerSecond));
 
     // update memory usage
     ui->memory_usage_label->setText(QString("Memory usage: %1").arg(bytesToReadable(getMemUsedKb() * 1024)));
@@ -161,20 +169,20 @@ void MainWindow::updateLoop2s() {
 #pragma region MainWindow Listeners {
 
 void MainWindow::onAddScanFolderClicked() {
-    addItemToList(callFileDialogue("Open a folder", QFileDialog::Options(QFileDialog::ShowDirsOnly)), ui->folders_to_scan_list);
+    addItemsToList(callMultiDirSelectionDialogue(), ui->folders_to_scan_list);
 }
 
 void MainWindow::onAddSlaveFolderClicked() {
-    addItemToList(callFileDialogue("Open a folder", QFileDialog::Options(QFileDialog::ShowDirsOnly)), ui->slave_folders_list);
+    addItemsToList(callMultiDirSelectionDialogue(), ui->slave_folders_list);
 }
 
 void MainWindow::onSetMasterFolderClicked() {
-    masterFolder = callFileDialogue("Choose master folder", QFileDialog::Options(QFileDialog::ShowDirsOnly));
+    masterFolder = callDirSelectionDialogue("Choose master folder");
     ui->master_folder_label->setText(QString("Master folder: %1").arg(masterFolder));
 }
 
 void MainWindow::onSetDupesFolderClicked() {
-    dupesFolder = callFileDialogue("Choose master folder", QFileDialog::Options(QFileDialog::ShowDirsOnly));
+    dupesFolder = callDirSelectionDialogue("Choose master folder");
     ui->dupes_folder_label->setText(QString("Dupes folder: %1").arg(dupesFolder));
 }
 
@@ -184,7 +192,7 @@ void MainWindow::onExtentionCheckboxStateChanged(int state) {
 }
 
 void MainWindow::onAddExtensionButtonClicked() {
-    addItemToList(callTextDialogue("Input ext", "Extension:").replace(".", ""), ui->extension_filter_list);
+    addItemsToList(callTextDialogue("Input ext", "Extension:").replace(".", ""), ui->extension_filter_list);
 }
 
 void MainWindow::onCurrentModeChanged(int curr_mode) {
@@ -208,10 +216,10 @@ void MainWindow::onStartScanButtonClicked() {
     files_size_all = 0;
     files_size_processed = 0;
     unique_files.clear();
+    excluded_files.clear();
 
     setUiDisabled(true);
 
-    scan_active = true;
     scan_start_time = QDateTime::currentMSecsSinceEpoch();
 
     QEventLoop loop;
@@ -226,7 +234,7 @@ void MainWindow::onStartScanButtonClicked() {
     scan_modes.at(currentMode).display_function(this);
 
     setUiDisabled(false);
-    scan_active = false;
+    etaMode = DISABLED;
     setCurrentTask("Idle");
 }
 
@@ -234,7 +242,7 @@ void MainWindow::onStartScanButtonClicked() {
 
 #pragma region MainWindow List operations {
 
-void MainWindow::addItemToList(const QString &text, QListWidget *list) {
+void MainWindow::addItemsToList(const QString &text, QListWidget *list) {
 
     if (text.isEmpty() || text.isNull()) {
         return;
@@ -253,6 +261,12 @@ void MainWindow::addItemToList(const QString &text, QListWidget *list) {
 
     list->addItem(item);
     list->setItemWidget(item, widget);
+}
+
+void MainWindow::addItemsToList(const QStringList &textList, QListWidget *list) {
+    for(const auto& text: textList) {
+        addItemsToList(text, list);
+    }
 }
 
 QListWidgetItem* MainWindow::getFromList(const QString& text, QListWidget* list) {
@@ -291,8 +305,27 @@ FolderListItemWidget* MainWindow::widgetFromWidgetItem(QListWidgetItem *item) {
     return dynamic_cast<FolderListItemWidget*>(item->listWidget()->itemWidget(item));
 }
 
-QString MainWindow::callFileDialogue(const QString &title, QFileDialog::Options options) {
-    return QFileDialog::getOpenFileName(this, title, "", "", nullptr, options);
+QStringList MainWindow::callMultiDirSelectionDialogue() {
+
+    QFileDialog w;
+    w.setOption(QFileDialog::DontUseNativeDialog, true);
+    w.setFileMode(QFileDialog::DirectoryOnly);
+    QListView *l = w.findChild<QListView*>("listView");
+    if (l) {
+         l->setSelectionMode(QAbstractItemView::MultiSelection);
+    }
+    QTreeView *t = w.findChild<QTreeView*>();
+    if (t) {
+       t->setSelectionMode(QAbstractItemView::MultiSelection);
+    }
+
+    w.exec();
+
+    return w.selectedFiles();
+}
+
+QString MainWindow::callDirSelectionDialogue(const QString &title) {
+    return QFileDialog::getOpenFileName(this, title, "", "", nullptr, QFileDialog::Options(QFileDialog::ShowDirsOnly));
 }
 
 QString MainWindow::callTextDialogue(const QString &title, const QString &prompt) {
@@ -348,18 +381,32 @@ void MainWindow::setUiDisabled(bool disabled) {
 
 #pragma region MainWindow duper functions {
 
+template<typename T>
+void MainWindow::removeDuplicates(T &arr) {
+    std::sort(arr.begin(), arr.end());
+    arr.erase(std::unique(arr.begin(), arr.end()), arr.end());
+}
+
 void MainWindow::startScanAsync() {
 
     for(int i = 0; i < ui->folders_to_scan_list->count(); i++){
         auto item = ui->folders_to_scan_list->item(i);
         auto itemWidget = widgetFromWidgetItem(item);
-        walkDir(itemWidget->getText(), [this](QString file) {
-            addEnumeratedFile(file);});
+        if(itemWidget->isWhitelisted()) {
+            walkDir(itemWidget->getText(), [this](QString file) {addEnumeratedFile(file);});
+        } else {
+            walkDir(itemWidget->getText(), [this](QString file) {
+                setCurrentTask(QString("Blacklisting file: %1").arg(file));
+                excluded_files.append(file);
+            });
+        }
     }
 
     // remove duplicates
-    std::sort(unique_files.begin(), unique_files.end());
-    unique_files.erase(std::unique(unique_files.begin(), unique_files.end()), unique_files.end());
+    removeDuplicates(unique_files);
+    removeDuplicates(excluded_files);
+    setCurrentTask("Removing blacklisted files");
+    unique_files.erase(std::remove_if(unique_files.begin(), unique_files.end(), [this](const File& file) {return excluded_files.contains(file.full_path);}));
 
     for(auto& file: unique_files) {
         files_size_all += QFile(file.full_path).size();
@@ -408,6 +455,8 @@ void MainWindow::exifRename() {
 
 void MainWindow::showStats() {
 
+    etaMode = ITEM_BASED;
+
     QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
 
     if (!unique_files.empty()) {
@@ -421,7 +470,7 @@ void MainWindow::showStats() {
         setCurrentTask(QString("Gathering information about: %1").arg(file.full_path));
 
         // load metadata
-        file.loadMetadata(ex_tool);
+        file.loadMetadata(ex_tool, selectedMetaFields);
 
         // iterate through name-array pairs
         for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
