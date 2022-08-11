@@ -27,6 +27,7 @@ HEADERS += \
     folder_list_item.h \
     gutils.h \
     mainwindow.h \
+    meta_converters.h \
     metadata_selection_dialogue.h \
     stats_dialog.h \
     ExifTool.h \

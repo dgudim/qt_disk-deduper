@@ -1,8 +1,9 @@
 #include "datatypes.h"
+#include "meta_converters.h"
 
 QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
 
-QMap<QString, QVector<QPair<QString, std::function<QString(QString)>>>> metadataMap_name_to_fileds =
+QMap<QString, QVector<QPair<QString, std::function<void(QString&)>>>> metadataMap_name_to_fileds =
 {
         {"Media type", {{"MIMEType", nullptr}}},
 
@@ -26,13 +27,13 @@ QMap<QString, QVector<QPair<QString, std::function<QString(QString)>>>> metadata
         {"Album", {{"Album", nullptr}}},
         {"Genre", {{"Genre", nullptr}}},
 
-        {"Duration", {{"MediaDuration", nullptr},
-                      {"Duration", nullptr},
-                      {"Track Duration", nullptr}}},
+        {"Duration", {{"MediaDuration", durationConverter},
+                      {"Duration", durationConverter},
+                      {"Track Duration", durationConverter}}},
 };
 
 // procedurally generated
-QMap<QString, QPair<QString, std::function<QString(QString)>>> metadataMap_field_to_name;
+QMap<QString, QPair<QString, std::function<void(QString&)>>> metadataMap_field_to_name;
 QList<QString> fieldList = metadataMap_name_to_fileds.keys();
 
 void File::loadMetadata(ExifTool *ex_tool) {
@@ -79,7 +80,7 @@ void File::loadMetadata(ExifTool *ex_tool) {
                 QString value = gathered_values[meta_field_and_converter.first].trimmed();
                 // use converter if provided
                 if(meta_field_and_converter.second){
-                    value = meta_field_and_converter.second(value);
+                    meta_field_and_converter.second(value);
                 }
                 metadata.insert(out_field, value);
             }

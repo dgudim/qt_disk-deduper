@@ -37,7 +37,7 @@ QList<ScanModeProperties> scan_modes = {
     {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, &MainWindow::exifRename_display, nullptr},
     {"Show statistics", "Get statistics of selected folders (Extensions, camera models, empty folders) and write them into a text file", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
 
-#define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this, func, Qt::QueuedConnection, __VA_ARGS__);
+#define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this_window, func, Qt::QueuedConnection, __VA_ARGS__);
 
 MainWindow *MainWindow::this_window = 0;
 
@@ -88,10 +88,10 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     connect(timer_100Ms, &QTimer::timeout, this, &MainWindow::updateLoop100Ms);
     timer_100Ms->start();
 
-    auto timer_1s = new QTimer(this);
-    timer_1s->setInterval(2000); // 2000ms (0.5 times per second)
-    connect(timer_1s, &QTimer::timeout, this, &MainWindow::updateLoop2s);
-    timer_1s->start();
+    auto timer_2s = new QTimer(this);
+    timer_2s->setInterval(2000); // 2000ms (0.5 times per second)
+    connect(timer_2s, &QTimer::timeout, this, &MainWindow::updateLoop2s);
+    timer_2s->start();
 
     // setup ui listeners
     connect(ui->add_scan_folder_button, SIGNAL(clicked()), this, SLOT(onAddScanFolderClicked()));
@@ -144,6 +144,7 @@ void MainWindow::updateLoop2s() {
     // update disk usage
     auto disk_read = getDiskReadSizeB();
     ui->disk_read_label->setText(QString("Disk read: %1/s").arg(bytesToReadable((disk_read - lastMeasuredDiskRead) / 2.0)));
+
     // floating average
     averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
     lastMeasuredDiskRead = disk_read;
@@ -211,18 +212,13 @@ void MainWindow::onStartScanButtonClicked() {
     scan_active = true;
     scan_start_time = QDateTime::currentMSecsSinceEpoch();
 
-    // start separate event loop so the main thread does not hang
     QEventLoop loop;
     QFutureWatcher<void> futureWatcher;
 
-    // QueuedConnection is necessary in case the signal finished is emitted before the loop starts (if the task is already finished when setFuture is called)
-    connect(&futureWatcher, SIGNAL(finished()), &loop, SLOT(quit()), Qt::QueuedConnection);
-
-    futureWatcher.setFuture(QtConcurrent::run(this, &MainWindow::startScanAsync));
-
     // process heavy stuff in a separate thread
+    connect(&futureWatcher, SIGNAL(finished()), &loop, SLOT(quit()));
+    futureWatcher.setFuture(QtConcurrent::run(this, &MainWindow::startScanAsync));
     loop.exec();
-    futureWatcher.waitForFinished();
 
     // display results in main thread
     scan_modes.at(currentMode).display_function(this);
@@ -303,11 +299,11 @@ QString MainWindow::callTextDialogue(const QString &title, const QString &prompt
     return ok ? text : "";
 }
 
-void MainWindow::displayWarning(const QString &message){
+void MainWindow::displayWarning(const QString &message) {
     QMessageBox::warning(this, "Warning", message);
 }
 
-void MainWindow::setCurrentTask(const QString &status){
+void MainWindow::setCurrentTask(const QString &status) {
     if(QThread::currentThread() == thread()) {
         ui->current_task_label->setText(QString("Current task: %1").arg(status));
     } else {
@@ -317,12 +313,12 @@ void MainWindow::setCurrentTask(const QString &status){
 
 void MainWindow::appendToLog(const QString &msg, bool error) {
     if(QThread::currentThread() == this_window->thread()) {
-        if(this_window && error) {
+        if(error) {
             this_window->ui->log_text->insertHtml(msg);
             this_window->ui->log_text->insertHtml("<br>");
         }
     } else {
-        QMetaObject::invokeMethod(this_window, "appendToLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(bool, error));
+        MOVE_TO_UI_THREAD("appendToLog", Q_ARG(QString, msg), Q_ARG(bool, error));
     }
 };
 
@@ -425,7 +421,8 @@ void MainWindow::showStats() {
         setCurrentTask(QString("Gathering information about: %1").arg(file.full_path));
 
         // load metadata
-        file.loadMetadata(ex_tool);
+        //file.loadMetadata(ex_tool);
+        this->thread()->msleep(10);
 
         // iterate through name-array pairs
         for (auto& [metadata_key, metadata_array]: meta_fields_stats) {

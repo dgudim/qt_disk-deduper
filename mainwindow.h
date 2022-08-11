@@ -76,6 +76,7 @@ private slots:
     void removeItemFromList(const QString& text, QListWidget* list);
 
     void setCurrentTask(const QString &status);
+
 private:
     Ui::MainWindow *ui;
     Stats_dialog *stats_dialog;
