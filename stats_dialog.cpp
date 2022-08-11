@@ -40,10 +40,8 @@ Stats_dialog::Stats_dialog(QWidget *parent, const StatsContainer& stats) : QDial
 void Stats_dialog::loadTable(const QStringList& headers, const QString& name, const QVector<Countable_qstring>& data) {
 
     QWidget* tab_container = new QWidget();
-    tab_container->setObjectName(name);
     QVBoxLayout* verticalLayout = new QVBoxLayout(tab_container);
     QTableWidget* table = new QTableWidget(tab_container);
-    table->setObjectName(name + "table");
     verticalLayout->addWidget(table);
 
     ui->stats_tabs->addTab(tab_container, QString());

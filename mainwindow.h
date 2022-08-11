@@ -21,6 +21,8 @@
 
 #include <functional>
 
+#include "metadata_selection_dialogue.h"
+#include "ExifTool.h"
 #include "stats_dialog.h"
 #include "folder_list_item.h"
 
@@ -49,6 +51,14 @@ public:
     void exifRename_display();
     void showStats_display();
 
+    bool showStats_request();
+
+    // for displaying log messages in the ui
+    static MainWindow *this_window;
+
+public slots:
+    static void appendToLog(const QString &msg, bool error);
+
 private slots:
     void onAddScanFolderClicked();
     void onAddSlaveFolderClicked();
@@ -65,19 +75,17 @@ private slots:
 
     void removeItemFromList(const QString& text, QListWidget* list);
 
-    void addEnumeratedFile(const QString& file);
-
     void setCurrentTask(const QString &status);
-    void setLastMessage(const QString &status);
-
 private:
     Ui::MainWindow *ui;
     Stats_dialog *stats_dialog;
+    Metadata_selection_dialogue *selection_dialogue;
 
     void updateLoop100Ms();
     void updateLoop2s();
 
     void addItemToList(const QString& text, QListWidget* list);
+
     QListWidgetItem* getFromList(const QString& text, QListWidget* list);
     void setListItemsDisabled(QListWidget* list, bool disable);
     FolderListItemWidget* widgetFromWidgetItem(QListWidgetItem *item);
@@ -85,6 +93,7 @@ private:
     QString callFileDialogue(const QString& title, QFileDialog::Options options);
     QString callTextDialogue(const QString &title, const QString &prompt);
 
+    void addEnumeratedFile(const QString& file);
     void displayWarning(const QString &message);
 
     void startScanAsync();
@@ -115,6 +124,7 @@ private:
 
     // metadata extraction
     StatsContainer stat_results;
+    QVector<QString> selectedMetaFields;
 
 };
 #endif // MAINWINDOW_H

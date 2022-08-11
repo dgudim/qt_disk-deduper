@@ -16,6 +16,7 @@ SOURCES += \
     gutils.cpp \
     main.cpp \
     mainwindow.cpp \
+    metadata_selection_dialogue.cpp \
     stats_dialog.cpp \
     ExifTool.cpp \
     ExifToolPipe.cpp \
@@ -26,6 +27,7 @@ HEADERS += \
     folder_list_item.h \
     gutils.h \
     mainwindow.h \
+    metadata_selection_dialogue.h \
     stats_dialog.h \
     ExifTool.h \
     ExifToolPipe.h \
@@ -34,6 +36,7 @@ HEADERS += \
 FORMS += \
     folder_list_item.ui \
     mainwindow.ui \
+    metadata_selection_dialogue.ui \
     stats_dialog.ui
 
 # Default rules for deployment.

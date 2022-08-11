@@ -4,29 +4,29 @@ QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:
 
 QMap<QString, QVector<QPair<QString, std::function<QString(QString)>>>> metadataMap_name_to_fileds =
 {
-        {"media_type", {{"MIMEType", nullptr}}},
+        {"Media type", {{"MIMEType", nullptr}}},
 
-        {"creation_date", {{"MediaCreateDate", nullptr},
+        {"Creation date", {{"MediaCreateDate", nullptr},
                            {"ContentCreateDate", nullptr},
                            {"FileModificationDate/Time", nullptr}}},
 
-        {"camera_model", {{"Model", nullptr},
+        {"Camera model", {{"Model", nullptr},
                           {"CameraModelName", nullptr}}},
 
-        {"camera_manufacturer", {{"Make", nullptr}}},
+        {"Camera manufacturer", {{"Make", nullptr}}},
 
-        {"width", {{"ImageWidth", nullptr},
+        {"Width", {{"ImageWidth", nullptr},
                    {"ExifImageWidth", nullptr}}},
 
-        {"height", {{"ImageHeight", nullptr},
+        {"Height", {{"ImageHeight", nullptr},
                     {"ExifImageWidth", nullptr}}},
 
-        {"artist", {{"Artist", nullptr}}},
-        {"title", {{"Title", nullptr}}},
-        {"album", {{"Album", nullptr}}},
-        {"genre", {{"Genre", nullptr}}},
+        {"Artist", {{"Artist", nullptr}}},
+        {"Title", {{"Title", nullptr}}},
+        {"Album", {{"Album", nullptr}}},
+        {"Genre", {{"Genre", nullptr}}},
 
-        {"duration", {{"MediaDuration", nullptr},
+        {"Duration", {{"MediaDuration", nullptr},
                       {"Duration", nullptr},
                       {"Track Duration", nullptr}}},
 };
@@ -44,6 +44,7 @@ void File::loadMetadata(ExifTool *ex_tool) {
 
     // construct lookup table if it doesn't exist
     if (metadataMap_field_to_name.isEmpty()) {
+        qDebug() << "metadataMap_field_to_name constructed";
         for (auto& key: fieldList){
             for (auto& meta_field_and_converter: metadataMap_name_to_fileds[key]){
                 metadataMap_field_to_name.insert(meta_field_and_converter.first, {key, meta_field_and_converter.second});
@@ -65,7 +66,7 @@ void File::loadMetadata(ExifTool *ex_tool) {
         }
         delete info;
     } else if (ex_tool->LastComplete() <= 0) {
-        qCritical() << "Error executing exiftool!";
+        qCritical() << "Error executing exiftool on " + full_path;
     }
 
     for(auto& out_field: fieldList) {
@@ -85,11 +86,15 @@ void File::loadMetadata(ExifTool *ex_tool) {
         }
         // no suitable field was found
         if (!metadata.contains(out_field)) {
-            qWarning() << "Could not get " << out_field << " for " << full_path;
+            qInfo() << "Could not get" << out_field << "for" << full_path;
             metadata.insert(out_field, "none");
         }
     }
 
     char *err = ex_tool->GetError();
     if (err) qCritical() << err;
+}
+
+QList<QString> getMetaFieldsList() {
+    return fieldList;
 }

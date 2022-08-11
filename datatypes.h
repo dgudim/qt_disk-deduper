@@ -77,6 +77,8 @@ private:
     bool metadata_loaded = false;
 };
 
+QList<QString> getMetaFieldsList();
+
 struct StatsContainer {
 
     int total_files = 0;

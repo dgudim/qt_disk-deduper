@@ -26,22 +26,26 @@ struct ScanModeProperties {
     QString description;
     std::function<void(MainWindow*)> process_function;
     std::function<void(MainWindow*)> display_function;
+    std::function<bool(MainWindow*)> request_function;
 };
 
 QList<ScanModeProperties> scan_modes = {
-    {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::hashCompare_display},
-    {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::nameCompare_display},
-    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupeMove_display},
-    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupeRename_display},
-    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, &MainWindow::exifRename_display},
-    {"Show statistics", "Get statistics of selected folders (Extensions, camera models, empty folders) and write them into a text file", &MainWindow::showStats, &MainWindow::showStats_display}};
+    {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::hashCompare_display, nullptr},
+    {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::nameCompare_display, nullptr},
+    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupeMove_display, nullptr},
+    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupeRename_display, nullptr},
+    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, &MainWindow::exifRename_display, nullptr},
+    {"Show statistics", "Get statistics of selected folders (Extensions, camera models, empty folders) and write them into a text file", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
 
 #define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this, func, Qt::QueuedConnection, __VA_ARGS__);
 
+MainWindow *MainWindow::this_window = 0;
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
 
     ui->setupUi(this);
+
+    this_window = this;
 
     // setup initial values
     program_start_time = QDateTime::currentMSecsSinceEpoch();
@@ -50,7 +54,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     setCurrentTask("Idle");
 
     QStringList modeNames;
-    for(auto& [mode_name, mode_description, pfunc, dfunc]: scan_modes){
+    for(auto& [mode_name, mode_description, pfunc, dfunc, rfunc]: scan_modes){
         modeNames.push_back(mode_name);
     }
     ui->mode_combo_box->insertItems(0, modeNames);
@@ -191,6 +195,11 @@ void MainWindow::onStartScanButtonClicked() {
         return;
     }
 
+    if(scan_modes.at(currentMode).request_function && !scan_modes.at(currentMode).request_function(this)) {
+        displayWarning("Invalid configuration, will not do anyting");
+        return;
+    }
+
     // reset variables
     processed_files = 0;
     files_size_all = 0;
@@ -306,11 +315,14 @@ void MainWindow::setCurrentTask(const QString &status){
     }
 }
 
-void MainWindow::setLastMessage(const QString &status) {
-    if(QThread::currentThread() == thread()) {
-       ui->last_output_label->setText(QString("Last output: %1").arg(status));
+void MainWindow::appendToLog(const QString &msg, bool error) {
+    if(QThread::currentThread() == this_window->thread()) {
+        if(this_window && error) {
+            this_window->ui->log_text->insertHtml(msg);
+            this_window->ui->log_text->insertHtml("<br>");
+        }
     } else {
-       MOVE_TO_UI_THREAD("setLastMessage", Q_ARG(QString, status));
+        QMetaObject::invokeMethod(this_window, "appendToLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(bool, error));
     }
 };
 
@@ -402,20 +414,17 @@ void MainWindow::showStats() {
 
     ExifTool *ex_tool = new ExifTool();
 
-    QList<QString> metadata_keys;
     if (!unique_files.empty()) {
-        unique_files[0].loadMetadata(ex_tool);
-        metadata_keys = unique_files[0].metadata.keys();
-        // metadata_key = extensions / camera_model / etc
-        for (auto& metadata_key: metadata_keys) {
+        for (auto& metadata_key: selectedMetaFields) {
             meta_fields_stats.append({metadata_key, {}});
         }
     }
+
     for(auto& file: unique_files) {
 
         setCurrentTask(QString("Gathering information about: %1").arg(file.full_path));
 
-        // load file metadata using exiftool
+        // load metadata
         file.loadMetadata(ex_tool);
 
         // iterate through name-array pairs
@@ -467,6 +476,14 @@ void MainWindow::autoDedupeRename_display() {
 
 void MainWindow::exifRename_display() {
 
+}
+
+bool MainWindow::showStats_request() {
+    selection_dialogue = new Metadata_selection_dialogue(this);
+    selection_dialogue->setModal(true);
+    selection_dialogue->exec();
+    selectedMetaFields = selection_dialogue->getSelected();
+    return !selectedMetaFields.empty();
 }
 
 void MainWindow::showStats_display() {
