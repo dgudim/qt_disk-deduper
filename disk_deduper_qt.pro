@@ -12,6 +12,7 @@ QMAKE_CXXFLAGS_WARN_ON += -Wno-unknown-pragmas -Wunused-parameter
 
 SOURCES += \
     datatypes.cpp \
+    dupes_list.cpp \
     folder_list_item.cpp \
     gutils.cpp \
     main.cpp \
@@ -24,6 +25,7 @@ SOURCES += \
 
 HEADERS += \
     datatypes.h \
+    dupes_list.h \
     folder_list_item.h \
     gutils.h \
     mainwindow.h \
@@ -35,6 +37,7 @@ HEADERS += \
     TagInfo.h
 
 FORMS += \
+    dupes_list.ui \
     folder_list_item.ui \
     mainwindow.ui \
     metadata_selection_dialogue.ui \
