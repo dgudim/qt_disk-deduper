@@ -41,7 +41,11 @@ QList<ScanModeProperties> scan_modes = {
 
 MainWindow *MainWindow::this_window = 0;
 
+QSettings settings(QSettings::UserScope, "dgudim", "cleaner");
+
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
+
+    qRegisterMetaTypeStreamOperators<FolderListItemData>("FolderListItemData");
 
     ui->setupUi(this);
 
@@ -59,8 +63,11 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
         modeNames.push_back(mode_name);
     }
     ui->mode_combo_box->insertItems(0, modeNames);
-    ui->mode_combo_box->setCurrentIndex(ScanMode::HASH_COMPARE);
-    onCurrentModeChanged(ScanMode::HASH_COMPARE);
+
+    // load previous mode
+    int mode = settings.value("current_mode", ScanMode::HASH_COMPARE).toInt();
+    ui->mode_combo_box->setCurrentIndex(mode);
+    onCurrentModeChanged(mode);
 
     // setup piechart
     series = new QPieSeries();
@@ -94,6 +101,15 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     connect(timer_2s, &QTimer::timeout, this, &MainWindow::updateLoop2s);
     timer_2s->start();
 
+    // load folders and extensions
+    loadList("folders", ui->folders_to_scan_list);
+    loadList("slave_folders", ui->slave_folders_list);
+    loadList("extensions", ui->extension_filter_list);
+    masterFolder = settings.value("master_folder").toString();
+    dupesFolder = settings.value("dupes_folder").toString();
+    ui->master_folder_label->setText(QString("Master folder: %1").arg(masterFolder));
+    ui->dupes_folder_label->setText(QString("Dupes folder: %1").arg(dupesFolder));
+
     // setup ui listeners
     connect(ui->add_scan_folder_button, SIGNAL(clicked()), this, SLOT(onAddScanFolderClicked()));
     connect(ui->add_slave_folder_button, SIGNAL(clicked()), this, SLOT(onAddSlaveFolderClicked()));
@@ -105,16 +121,31 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     connect(ui->mode_combo_box, SIGNAL(currentIndexChanged(int)), this, SLOT(onCurrentModeChanged(int)));
 
-    ui->extention_filter_enabled_checkbox->setCheckState(Qt::Unchecked);
-    onExtentionCheckboxStateChanged(Qt::Unchecked);
+    // load extension filter state
+    Qt::CheckState ext_filter_state = (Qt::CheckState)settings.value("ext_filter_state", ExtenstionFilterState::DISABLED).toInt();
+    ui->extention_filter_enabled_checkbox->setCheckState(ext_filter_state);
+    onExtentionCheckboxStateChanged(ext_filter_state);
+
     connect(ui->extention_filter_enabled_checkbox, SIGNAL(stateChanged(int)), this, SLOT(onExtentionCheckboxStateChanged(int)));
 
     connect(ui->start_scan_button, SIGNAL(clicked()), this, SLOT(onStartScanButtonClicked()));
 }
 
 MainWindow::~MainWindow() {
-  delete ex_tool;
-  delete ui;
+
+    // save ui state on exit
+    settings.setValue("current_mode", ui->mode_combo_box->currentIndex());
+    settings.setValue("ext_filter_state", ui->extention_filter_enabled_checkbox->checkState());
+
+    saveList("folders", ui->folders_to_scan_list);
+    saveList("slave_folders", ui->slave_folders_list);
+    saveList("extensions", ui->extension_filter_list);
+
+    settings.setValue("master_folder", masterFolder);
+    settings.setValue("dupes_folder", dupesFolder);
+
+    delete ex_tool;
+    delete ui;
 }
 
 #pragma region MainWindow loops {
@@ -261,6 +292,25 @@ void MainWindow::onStartScanButtonClicked() {
 
 #pragma region MainWindow List operations {
 
+void MainWindow::saveList(const QString &key, QListWidget *list) {
+    QVector<FolderListItemData> dataList = getAllWidgetsDataFromList(list);
+    settings.beginWriteArray(key);
+    for (int i = 0; i < dataList.length(); i++) {
+        settings.setArrayIndex(i);
+        settings.setValue("data", QVariant::fromValue(dataList.at(i)));
+    }
+    settings.endArray();
+}
+
+void MainWindow::loadList(const QString &key, QListWidget *list) {
+    int size = settings.beginReadArray(key);
+    for (int i = 0; i < size; i++){
+        settings.setArrayIndex(i);
+        addWidgetToList(list, new FolderListItemWidget(this, list, settings.value("data").value<FolderListItemData>()));
+    }
+    settings.endArray();
+}
+
 void MainWindow::addItemsToList(QString text, QListWidget *list, bool canBlacklist, bool lowercase) {
 
     if (text.isEmpty() || text.isNull()) {
@@ -276,14 +326,9 @@ void MainWindow::addItemsToList(QString text, QListWidget *list, bool canBlackli
         return;
     }
 
-    auto item = new QListWidgetItem();
     auto widget = new FolderListItemWidget(this, list, canBlacklist);
-
     widget->setText(text);
-    item->setSizeHint(widget->sizeHint());
-
-    list->addItem(item);
-    list->setItemWidget(item, widget);
+    addWidgetToList(list, widget);
 }
 
 void MainWindow::addItemsToList(const QStringList &textList, QListWidget *list, bool canBlacklist, bool lowercase) {
@@ -292,10 +337,35 @@ void MainWindow::addItemsToList(const QStringList &textList, QListWidget *list, 
     }
 }
 
+void MainWindow::addWidgetToList(QListWidget *list, FolderListItemWidget* widget) {
+    auto item = new QListWidgetItem();
+    item->setSizeHint(widget->sizeHint());
+
+    list->addItem(item);
+    list->setItemWidget(item, widget);
+}
+
+QStringList MainWindow::getAllStringsFromList(QListWidget* list) {
+    QStringList entries;
+    for(int i = 0; i < list->count(); i++){
+        entries.append(widgetFromList(list, i)->getText());
+    }
+    return entries;
+}
+
+QVector<FolderListItemData> MainWindow::getAllWidgetsDataFromList(QListWidget* list) {
+    QVector<FolderListItemData> entries;
+    for(int i = 0; i < list->count(); i++){
+        entries.append(widgetFromList(list, i)->getData());
+    }
+    return entries;
+}
+
+
 QListWidgetItem* MainWindow::getFromList(const QString& text, QListWidget* list) {
     for(int i = 0; i < list->count(); i++){
         auto item = list->item(i);
-        auto itemWidget = widgetFromWidgetItem(item);
+        auto itemWidget = widgetFromList(list, i);
         if(itemWidget->getText() == text) {
             return item;
         }
@@ -314,9 +384,7 @@ void MainWindow::removeItemFromList(const QString& text, QListWidget* list) {
 
 void MainWindow::setListItemsDisabled(QListWidget* list, bool disable) {
     for(int i = 0; i < list->count(); i++){
-        auto item = list->item(i);
-        auto itemWidget = widgetFromWidgetItem(item);
-        itemWidget->setDisabled(disable);
+        widgetFromList(list, i)->setDisabled(disable);
     }
 }
 
@@ -324,8 +392,8 @@ void MainWindow::setListItemsDisabled(QListWidget* list, bool disable) {
 
 #pragma region MainWindow utility functions {
 
-FolderListItemWidget* MainWindow::widgetFromWidgetItem(QListWidgetItem *item) {
-    return dynamic_cast<FolderListItemWidget*>(item->listWidget()->itemWidget(item));
+FolderListItemWidget* MainWindow::widgetFromList(QListWidget* list, int index) {
+    return dynamic_cast<FolderListItemWidget*>(list->itemWidget(list->item(index)));
 }
 
 QStringList MainWindow::callMultiDirSelectionDialogue() {
@@ -418,22 +486,18 @@ bool MainWindow::startScanAsync() {
     QStringList listed_exts;
 
     for(int i = 0; i < ui->folders_to_scan_list->count(); i++) {
-        auto itemWidget = widgetFromWidgetItem(ui->folders_to_scan_list->item(i));
+        auto itemWidget = widgetFromList(ui->folders_to_scan_list, i);
         if(!itemWidget->isWhitelisted()) {
             blacklisted_dirs.append(itemWidget->getText());
         }
     }
 
     if(extFilterState != ExtenstionFilterState::DISABLED) {
-        for(int i = 0; i < ui->extension_filter_list->count(); i++) {
-            auto itemWidget = widgetFromWidgetItem(ui->extension_filter_list->item(i));
-            listed_exts.append(itemWidget->getText());
-        }
+        listed_exts = getAllStringsFromList(ui->extension_filter_list);
     }
 
     for(int i = 0; i < ui->folders_to_scan_list->count(); i++){
-        auto itemWidget = widgetFromWidgetItem(ui->folders_to_scan_list->item(i));
-
+        auto itemWidget = widgetFromList(ui->folders_to_scan_list, i);
         if(itemWidget->isWhitelisted()) {
             walkDir(itemWidget->getText(), blacklisted_dirs, listed_exts,
                     extFilterState,

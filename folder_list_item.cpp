@@ -1,17 +1,33 @@
 #include "folder_list_item.h"
 #include "ui_folder_list_item.h"
 
-FolderListItemWidget::FolderListItemWidget(QWidget *parent, QListWidget* parent_list, bool canBlacklist) : QWidget(parent), ui(new Ui::FolderListItemWidget) {
+QDataStream& operator<<(QDataStream& out, const FolderListItemData& data) {
+    out << data.text << data.canBlacklist << data.whitelisted;
+    return out;
+}
+
+QDataStream& operator>>(QDataStream& in, FolderListItemData& data) {
+    in >> data.text >> data.canBlacklist >> data.whitelisted;
+    return in;
+}
+
+FolderListItemWidget::FolderListItemWidget(QWidget *parent, QListWidget* parent_list, bool canBlacklist)
+    : QWidget(parent), ui(new Ui::FolderListItemWidget) {
 
     this->parent_list = parent_list;
-
     ui->setupUi(this);
-
-    ui->exclusionButton->setVisible(canBlacklist);
+    ui->exclusionButton->setHidden(!canBlacklist);
 
     connect(ui->exclusionButton, SIGNAL(clicked()), this, SLOT(onExecutionButtonClicked()));
     connect(ui->deleteButton, SIGNAL(clicked()), this, SLOT(onRemoveButtonClicked()));
     connect(this, SIGNAL(sendRemoveItem(QString,QListWidget*)), parent, SLOT(removeItemFromList(QString,QListWidget*)));
+}
+
+FolderListItemWidget::FolderListItemWidget(QWidget *parent, QListWidget* parent_list, const FolderListItemData &data)
+    : FolderListItemWidget(parent, parent_list, data.canBlacklist) {
+
+    setText(data.text);
+    setWhitelisted(data.whitelisted);
 }
 
 FolderListItemWidget::~FolderListItemWidget() {
@@ -28,7 +44,6 @@ void FolderListItemWidget::onRemoveButtonClicked() {
 
 void FolderListItemWidget::onExecutionButtonClicked() {
     setWhitelisted(!whitelisted);
-    ui->exclusionButton->setIcon(QIcon::fromTheme(whitelisted ? "list-add" : "process-stop"));
 }
 
 QString FolderListItemWidget::getText() {
@@ -46,4 +61,9 @@ bool FolderListItemWidget::isWhitelisted() {
 
 void FolderListItemWidget::setWhitelisted(bool is_whitelisted) {
     whitelisted = is_whitelisted;
+    ui->exclusionButton->setIcon(QIcon::fromTheme(whitelisted ? "list-add" : "process-stop"));
+}
+
+FolderListItemData FolderListItemWidget::getData() {
+    return { getText(), !ui->exclusionButton->isHidden(), whitelisted };
 }

@@ -19,6 +19,8 @@
 #include <QMessageBox>
 #include <QtDebug>
 
+#include <QSettings>
+
 #include <functional>
 
 #include "metadata_selection_dialogue.h"
@@ -92,9 +94,16 @@ private:
     void addItemsToList(QString text, QListWidget *list, bool canBlacklist = true, bool lowercase = false);
     void addItemsToList(const QStringList &items, QListWidget *list, bool canBlacklist = true, bool lowercase = false);
 
+    void addWidgetToList(QListWidget *list, FolderListItemWidget *widget);
+
     QListWidgetItem* getFromList(const QString& text, QListWidget* list);
-    void setListItemsDisabled(QListWidget* list, bool disable);
-    FolderListItemWidget* widgetFromWidgetItem(QListWidgetItem *item);
+    QStringList getAllStringsFromList(QListWidget *list);
+    QVector<FolderListItemData> getAllWidgetsDataFromList(QListWidget *list);
+    void setListItemsDisabled(QListWidget *list, bool disable);
+    FolderListItemWidget* widgetFromList(QListWidget *list, int undex);
+
+    void saveList(const QString &key, QListWidget *list);
+    void loadList(const QString &key, QListWidget *list);
 
     QString callDirSelectionDialogue(const QString &title);
     QStringList callMultiDirSelectionDialogue();
@@ -129,7 +138,6 @@ private:
 
     // general variables
     QVector<File> unique_files;
-
     QStringList directories_to_scan;
 
     // metadata extraction

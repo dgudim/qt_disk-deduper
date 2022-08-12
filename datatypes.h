@@ -5,6 +5,9 @@
 #include <QVector>
 #include <QObject>
 
+#include <QMap>
+#include <QDataStream>
+
 #include "ExifTool.h"
 #include "gutils.h"
 
@@ -71,6 +74,30 @@ struct File {
 
     bool operator<(const File &other) const {
         return full_path < other.full_path;
+    }
+
+    QDataStream& operator<<(QDataStream &out) {
+        out << full_path;
+        out << name;
+        out << size_bytes;
+        out << extension;
+        out << hash;
+        out << metadata;
+        out << metadata_loaded;
+
+        return out;
+    }
+
+    QDataStream& operator>>(QDataStream &in) {
+        in >> full_path;
+        in >> name;
+        in >> size_bytes;
+        in >> extension;
+        in >> hash;
+        in >> metadata;
+        in >> metadata_loaded;
+
+        return in;
     }
 
 private:
