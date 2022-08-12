@@ -1,11 +1,13 @@
 #include "folder_list_item.h"
 #include "ui_folder_list_item.h"
 
-FolderListItemWidget::FolderListItemWidget(QWidget *parent, QListWidget* list) : QWidget(parent), ui(new Ui::FolderListItemWidget) {
+FolderListItemWidget::FolderListItemWidget(QWidget *parent, QListWidget* parent_list, bool canBlacklist) : QWidget(parent), ui(new Ui::FolderListItemWidget) {
 
-    this->parent_list = list;
+    this->parent_list = parent_list;
 
     ui->setupUi(this);
+
+    ui->exclusionButton->setVisible(canBlacklist);
 
     connect(ui->exclusionButton, SIGNAL(clicked()), this, SLOT(onExecutionButtonClicked()));
     connect(ui->deleteButton, SIGNAL(clicked()), this, SLOT(onRemoveButtonClicked()));

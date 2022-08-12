@@ -31,7 +31,7 @@ namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 enum EtaMode {
-    DISABLED,
+    OFF,
     SPEED_BASED,
     ITEM_BASED
 };
@@ -89,8 +89,8 @@ private:
     void updateLoop100Ms();
     void updateLoop2s();
 
-    void addItemsToList(const QString &text, QListWidget *list);
-    void addItemsToList(const QStringList &items, QListWidget *list);
+    void addItemsToList(QString text, QListWidget *list, bool canBlacklist = true, bool lowercase = false);
+    void addItemsToList(const QStringList &items, QListWidget *list, bool canBlacklist = true, bool lowercase = false);
 
     QListWidgetItem* getFromList(const QString& text, QListWidget* list);
     void setListItemsDisabled(QListWidget* list, bool disable);
@@ -103,7 +103,7 @@ private:
     void addEnumeratedFile(const QString& file);
     void displayWarning(const QString &message);
 
-    void startScanAsync();
+    bool startScanAsync();
     void hashAllFiles();
 
     void setUiDisabled(bool state);
@@ -114,7 +114,7 @@ private:
     quint64 program_start_time = 0;
     quint64 scan_start_time = 0;
     bool scan_active = false;
-    EtaMode etaMode = DISABLED;
+    EtaMode etaMode = OFF;
     int currentMode;
     quint32 processed_files = 0; // max 4294967295
     quint32 previous_processed_files = 0; // for measuring speed
@@ -128,7 +128,6 @@ private:
     QString dupesFolder;
 
     // general variables
-    QVector<QString> excluded_files;
     QVector<File> unique_files;
 
     QStringList directories_to_scan;

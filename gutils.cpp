@@ -4,10 +4,31 @@
 
 QMap<QString, quint64> size_multipliers = {{"b", 1}, {"Kb", 1024}, {"Mb", 1048576}, {"Gb", 1073741824}};
 
-void walkDir(const QString& dir, std::function<void(QString)> callback) {
-    QDirIterator it(dir, QStringList() << "*.*", QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        callback(it.next());
+void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
+             ExtenstionFilterState extFilterState, std::function<void(QString)> callback) {
+
+    bool ext_filter_enabled = extFilterState != ExtenstionFilterState::DISABLED;
+    bool blacklist_ext = extFilterState == ExtenstionFilterState::ENABLED_BLACK;
+
+    QDir directory(dir);
+    directory.setFilter(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks);
+
+    QFileInfoList list = directory.entryInfoList();
+    for(const auto& file_or_folder: list) {
+        if(file_or_folder.isFile()) {
+            bool add = !ext_filter_enabled;
+            for(const auto& extension: extensions) {
+                if(file_or_folder.completeSuffix().toLower().endsWith(extension) != blacklist_ext) {
+                    add = true;
+                    break;
+                }
+            }
+            if(add) {
+                callback(file_or_folder.absoluteFilePath());
+            }
+        } else if (file_or_folder.isDir() && !blacklisted_dirs.contains(file_or_folder.absoluteFilePath())){
+            walkDir(file_or_folder.absoluteFilePath(), blacklisted_dirs, extensions, extFilterState, callback);
+        }
     }
 }
 

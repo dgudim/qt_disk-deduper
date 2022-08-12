@@ -35,7 +35,7 @@ QList<ScanModeProperties> scan_modes = {
     {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupeMove_display, nullptr},
     {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupeRename_display, nullptr},
     {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, &MainWindow::exifRename_display, nullptr},
-    {"Show statistics", "Get statistics of selected folders (Extensions, camera models, empty folders) and write them into a text file", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
+    {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
 
 #define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this_window, func, Qt::QueuedConnection, __VA_ARGS__);
 
@@ -105,7 +105,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     connect(ui->mode_combo_box, SIGNAL(currentIndexChanged(int)), this, SLOT(onCurrentModeChanged(int)));
 
-    ui->extention_filter_enabled_checkbox->setChecked(true);
+    ui->extention_filter_enabled_checkbox->setCheckState(Qt::Unchecked);
+    onExtentionCheckboxStateChanged(Qt::Unchecked);
     connect(ui->extention_filter_enabled_checkbox, SIGNAL(stateChanged(int)), this, SLOT(onExtentionCheckboxStateChanged(int)));
 
     connect(ui->start_scan_button, SIGNAL(clicked()), this, SLOT(onStartScanButtonClicked()));
@@ -130,7 +131,7 @@ void MainWindow::updateLoop100Ms() {
         slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
     }
 
-    if (etaMode != DISABLED) {
+    if (etaMode != OFF) {
         ui->time_passed_label->setText(QString("Time passed: %1").arg(timeSinceTimestamp(scan_start_time)));
 
         float averagePerSec = etaMode == SPEED_BASED ? averageDiskReadSpeed : averageFilesPerSecond;
@@ -187,12 +188,25 @@ void MainWindow::onSetDupesFolderClicked() {
 }
 
 void MainWindow::onExtentionCheckboxStateChanged(int state) {
+
+    switch(state) {
+        case ExtenstionFilterState::DISABLED:
+            ui->extention_filter_enabled_checkbox->setText("Extension filter disabled");
+            break;
+        case ExtenstionFilterState::ENABLED_BLACK:
+            ui->extention_filter_enabled_checkbox->setText("Extension filter enabled (blacklist)");
+            break;
+        case ExtenstionFilterState::ENABLED_WHITE:
+            ui->extention_filter_enabled_checkbox->setText("Extension filter enabled (whitelist)");
+            break;
+    }
+
     ui->add_extention_button->setDisabled(state == Qt::CheckState::Unchecked);
     ui->extension_filter_list->setDisabled(state == Qt::CheckState::Unchecked);
 }
 
 void MainWindow::onAddExtensionButtonClicked() {
-    addItemsToList(callTextDialogue("Input ext", "Extension:").replace(".", ""), ui->extension_filter_list);
+    addItemsToList(callTextDialogue("Input ext", "Extension:").replace(".", ""), ui->extension_filter_list, false, true);
 }
 
 void MainWindow::onCurrentModeChanged(int curr_mode) {
@@ -212,29 +226,34 @@ void MainWindow::onStartScanButtonClicked() {
     }
 
     // reset variables
-    processed_files = 0;
     files_size_all = 0;
     files_size_processed = 0;
+    processed_files = 0;
+    previous_processed_files = 0;
     unique_files.clear();
-    excluded_files.clear();
+    averageFilesPerSecond = 0;
 
     setUiDisabled(true);
 
     scan_start_time = QDateTime::currentMSecsSinceEpoch();
 
     QEventLoop loop;
-    QFutureWatcher<void> futureWatcher;
+    QFutureWatcher<bool> futureWatcher;
 
     // process heavy stuff in a separate thread
     connect(&futureWatcher, SIGNAL(finished()), &loop, SLOT(quit()));
     futureWatcher.setFuture(QtConcurrent::run(this, &MainWindow::startScanAsync));
     loop.exec();
 
-    // display results in main thread
-    scan_modes.at(currentMode).display_function(this);
+    if(!futureWatcher.result()) {
+        displayWarning("Nothing to scan, your filters filter all the files");
+    } else {
+        // display results in main thread
+        scan_modes.at(currentMode).display_function(this);
+    }
 
     setUiDisabled(false);
-    etaMode = DISABLED;
+    etaMode = OFF;
     setCurrentTask("Idle");
 }
 
@@ -242,10 +261,14 @@ void MainWindow::onStartScanButtonClicked() {
 
 #pragma region MainWindow List operations {
 
-void MainWindow::addItemsToList(const QString &text, QListWidget *list) {
+void MainWindow::addItemsToList(QString text, QListWidget *list, bool canBlacklist, bool lowercase) {
 
     if (text.isEmpty() || text.isNull()) {
         return;
+    }
+
+    if(lowercase) {
+        text = text.toLower();
     }
 
     if (getFromList(text, list)) {
@@ -254,7 +277,7 @@ void MainWindow::addItemsToList(const QString &text, QListWidget *list) {
     }
 
     auto item = new QListWidgetItem();
-    auto widget = new FolderListItemWidget(this, list);
+    auto widget = new FolderListItemWidget(this, list, canBlacklist);
 
     widget->setText(text);
     item->setSizeHint(widget->sizeHint());
@@ -263,9 +286,9 @@ void MainWindow::addItemsToList(const QString &text, QListWidget *list) {
     list->setItemWidget(item, widget);
 }
 
-void MainWindow::addItemsToList(const QStringList &textList, QListWidget *list) {
+void MainWindow::addItemsToList(const QStringList &textList, QListWidget *list, bool canBlacklist, bool lowercase) {
     for(const auto& text: textList) {
-        addItemsToList(text, list);
+        addItemsToList(text, list, canBlacklist, lowercase);
     }
 }
 
@@ -387,32 +410,50 @@ void MainWindow::removeDuplicates(T &arr) {
     arr.erase(std::unique(arr.begin(), arr.end()), arr.end());
 }
 
-void MainWindow::startScanAsync() {
+bool MainWindow::startScanAsync() {
+
+    QStringList blacklisted_dirs;
+
+    ExtenstionFilterState extFilterState = (ExtenstionFilterState)ui->extention_filter_enabled_checkbox->checkState();
+    QStringList listed_exts;
+
+    for(int i = 0; i < ui->folders_to_scan_list->count(); i++) {
+        auto itemWidget = widgetFromWidgetItem(ui->folders_to_scan_list->item(i));
+        if(!itemWidget->isWhitelisted()) {
+            blacklisted_dirs.append(itemWidget->getText());
+        }
+    }
+
+    if(extFilterState != ExtenstionFilterState::DISABLED) {
+        for(int i = 0; i < ui->extension_filter_list->count(); i++) {
+            auto itemWidget = widgetFromWidgetItem(ui->extension_filter_list->item(i));
+            listed_exts.append(itemWidget->getText());
+        }
+    }
 
     for(int i = 0; i < ui->folders_to_scan_list->count(); i++){
-        auto item = ui->folders_to_scan_list->item(i);
-        auto itemWidget = widgetFromWidgetItem(item);
+        auto itemWidget = widgetFromWidgetItem(ui->folders_to_scan_list->item(i));
+
         if(itemWidget->isWhitelisted()) {
-            walkDir(itemWidget->getText(), [this](QString file) {addEnumeratedFile(file);});
-        } else {
-            walkDir(itemWidget->getText(), [this](QString file) {
-                setCurrentTask(QString("Blacklisting file: %1").arg(file));
-                excluded_files.append(file);
-            });
+            walkDir(itemWidget->getText(), blacklisted_dirs, listed_exts,
+                    extFilterState,
+                    [this](QString file) {addEnumeratedFile(file);});
         }
     }
 
     // remove duplicates
     removeDuplicates(unique_files);
-    removeDuplicates(excluded_files);
-    setCurrentTask("Removing blacklisted files");
-    unique_files.erase(std::remove_if(unique_files.begin(), unique_files.end(), [this](const File& file) {return excluded_files.contains(file.full_path);}));
+
+    if(unique_files.empty()) {
+        return false;
+    }
 
     for(auto& file: unique_files) {
         files_size_all += QFile(file.full_path).size();
     }
 
     scan_modes.at(currentMode).process_function(this);
+    return true;
 }
 
 void MainWindow::addEnumeratedFile(const QString& file) {

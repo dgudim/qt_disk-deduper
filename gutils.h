@@ -19,7 +19,14 @@
 
 #pragma region File utils {
 
-void walkDir(const QString& dir, std::function<void(QString)> callback);
+enum ExtenstionFilterState {
+    DISABLED,
+    ENABLED_BLACK,
+    ENABLED_WHITE
+};
+
+void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
+             ExtenstionFilterState extFilterState, std::function<void(QString)> callback);
 
 QString getFileHash(const QString& full_path);
 

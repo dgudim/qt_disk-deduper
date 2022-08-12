@@ -12,7 +12,7 @@ class FolderListItemWidget : public QWidget {
     Q_OBJECT
 
 public:
-    explicit FolderListItemWidget(QWidget *parent, QListWidget *list);
+    explicit FolderListItemWidget(QWidget *parent, QListWidget *parent_list, bool canBlacklist);
     ~FolderListItemWidget();
 
     void setText(const QString &text);

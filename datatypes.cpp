@@ -9,7 +9,9 @@ QMap<QString, QVector<QPair<QString, std::function<void(QString&)>>>> metadataMa
 
         {"Creation date", {{"MediaCreateDate", nullptr},
                            {"ContentCreateDate", nullptr},
-                           {"FileModificationDate/Time", nullptr}}},
+                           {"ContentCreateDate", nullptr},
+                           {"DateTimeOriginal", nullptr},
+                           {"FileModifyDate", nullptr}}},
 
         {"Camera model", {{"Model", nullptr},
                           {"CameraModelName", nullptr}}},
@@ -46,7 +48,7 @@ void File::loadMetadata(ExifTool *ex_tool, const QVector<QString>& selectedMetaF
     // construct lookup table if it doesn't exist
     if (metadataMap_field_to_name.isEmpty()) {
         qDebug() << "metadataMap_field_to_name constructed";
-        for (auto& key: fieldList){
+        for (auto& key: fieldList) {
             for (auto& meta_field_and_converter: metadataMap_name_to_fileds[key]){
                 metadataMap_field_to_name.insert(meta_field_and_converter.first, {key, meta_field_and_converter.second});
             }
@@ -61,8 +63,9 @@ void File::loadMetadata(ExifTool *ex_tool, const QVector<QString>& selectedMetaF
     if (info) {
         for (TagInfo *i = info; i; i = i->next) {
             QString name = QString::fromUtf8(i->name);
-            if(metadataMap_field_to_name.contains(name)) {
-                gathered_values.insert(name, QString::fromUtf8(i->value));
+            QString value = QString::fromUtf8(i->value);
+            if(metadataMap_field_to_name.contains(name) && !empty_values.contains(value)) {
+                gathered_values.insert(name, value);
             }
         }
         delete info;
@@ -74,8 +77,7 @@ void File::loadMetadata(ExifTool *ex_tool, const QVector<QString>& selectedMetaF
         // iterate thrugh all suitable fields
         for(auto& meta_field_and_converter: metadataMap_name_to_fileds[out_field]) {
             // check if if was returned by exiftool and is not considered empty
-            if(gathered_values.contains(meta_field_and_converter.first) &&
-                !empty_values.contains(gathered_values[meta_field_and_converter.first])) {
+            if(gathered_values.contains(meta_field_and_converter.first)) {
 
                 QString value = gathered_values[meta_field_and_converter.first].trimmed();
                 // use converter if provided

@@ -170,7 +170,10 @@
      <item>
       <widget class="QCheckBox" name="extention_filter_enabled_checkbox">
        <property name="text">
-        <string>Extension filter enabled</string>
+        <string>Extension filter</string>
+       </property>
+       <property name="tristate">
+        <bool>true</bool>
        </property>
       </widget>
      </item>
