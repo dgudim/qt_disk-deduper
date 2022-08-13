@@ -49,6 +49,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     ui->setupUi(this);
 
+    setWindowTitle("Disk deduper");
+
     ex_tool = new ExifTool();
     this_window = this;
 
@@ -165,14 +167,14 @@ void MainWindow::updateLoop100Ms() {
     if (etaMode != OFF) {
         ui->time_passed_label->setText(QString("Time passed: %1").arg(timeSinceTimestamp(scan_start_time)));
 
-        float averagePerSec = etaMode == SPEED_BASED ? averageDiskReadSpeed : averageFilesPerSecond;
+        float averagePerSec = qMax(etaMode == SPEED_BASED ? averageDiskReadSpeed : averageFilesPerSecond, 0.001f);
+        quint64 all = etaMode == SPEED_BASED ? files_size_all : unique_files.length() ;
+        quint64 processed = etaMode == SPEED_BASED ? files_size_processed : processed_files;
 
-        if (averagePerSec == 0){
-           ui->eta_label->setText("Eta: ∞");
-        } else {
-            quint64 left = etaMode == SPEED_BASED ? (files_size_all - files_size_processed) : (unique_files.length() - processed_files);
-            ui->eta_label->setText(QString("Eta: %1").arg(millisecondsToReadable(left / averagePerSec * 1000)));
-        }
+        QString eta_arg = QString("Eta: %1").arg(millisecondsToReadable((all - processed) / averagePerSec * 1000));
+
+        ui->eta_label->setText(eta_arg);
+        setWindowTitle(QString("Disk deduper (%1%, %2 left)").arg(processed / (double)all * 100).arg(eta_arg));
     }
 }
 

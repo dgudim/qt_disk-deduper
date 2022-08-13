@@ -23,6 +23,8 @@ public:
 Stats_dialog::Stats_dialog(QWidget *parent, const StatsContainer& stats) : QDialog(parent), ui(new Ui::Stats_dialog) {
     ui->setupUi(this);
 
+    setWindowTitle("View statistics");
+
     // open main window on dialogue close
     connect(this, SIGNAL(accepted()), parent, SLOT(show()));
     connect(this, SIGNAL(rejected()), parent, SLOT(show()));
