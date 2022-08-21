@@ -19,6 +19,11 @@
 #include <QMessageBox>
 #include <QtDebug>
 
+#include <QSqlDatabase>
+#include <QSqlDriver>
+#include <QSqlError>
+#include <QSqlQuery>
+
 #include <QSettings>
 
 #include <functional>
@@ -45,12 +50,12 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    void hashCompare();
-    void nameCompare();
-    void autoDedupeMove();
-    void autoDedupeRename();
-    void exifRename();
-    void showStats();
+    void hashCompare(QSqlDatabase db);
+    void nameCompare(QSqlDatabase);
+    void autoDedupeMove(QSqlDatabase db);
+    void autoDedupeRename(QSqlDatabase db);
+    void exifRename(QSqlDatabase);
+    void showStats(QSqlDatabase db);
 
     void hashCompare_display();
     void nameCompare_display();
@@ -113,7 +118,7 @@ private:
     void displayWarning(const QString &message);
 
     bool startScanAsync();
-    void hashAllFiles();
+    void hashAllFiles(QSqlDatabase db);
 
     void setUiDisabled(bool state);
 
@@ -146,6 +151,9 @@ private:
     Stats_dialog *stats_dialog;
     Metadata_selection_dialogue *selection_dialogue;
     ExifTool *ex_tool;
+
+    // dedupe results
+    QVector<QVector<QVector<File>>> dedupe_resuts;
 
     // utility functions
     template<typename T>

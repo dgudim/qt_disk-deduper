@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "gutils.h"
 #include "ui_mainwindow.h"
 
 enum PiechartIndex {
@@ -24,7 +25,7 @@ enum ScanMode {
 struct ScanModeProperties {
     QString name;
     QString description;
-    std::function<void(MainWindow*)> process_function;
+    std::function<void(MainWindow*, QSqlDatabase)> process_function;
     std::function<void(MainWindow*)> display_function;
     std::function<bool(MainWindow*)> request_function;
 };
@@ -41,11 +42,32 @@ QList<ScanModeProperties> scan_modes = {
 
 MainWindow *MainWindow::this_window = 0;
 
-QSettings settings(QSettings::UserScope, "dgudim", "cleaner");
+QSettings settings(QSettings::UserScope, "disk_deduper_qt", "ui_state");
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
 
     qRegisterMetaTypeStreamOperators<FolderListItemData>("FolderListItemData");
+
+    // init local sqlite database
+    QSqlDatabase storage_db = DbUtils::openDbConnection();
+
+    if(storage_db.isOpen()) {
+
+        QString columns;
+        QList<QString> metaFieldsList = getMetaFieldsList();
+        for(auto& meta_field: metaFieldsList) {
+            columns += "," + meta_field.replace(" ", "_") + " TEXT";
+        }
+
+        QString init_query_metadata = QString("CREATE TABLE IF NOT EXISTS metadata (full_path TEXT PRIMARY KEY, size INTEGER %1)").arg(columns);
+        QString init_query_hashes = "CREATE TABLE IF NOT EXISTS hashes (full_path TEXT PRIMARY KEY, size INTEGER, hash TEXT)";
+
+        qInfo() << "Init db (metadata): " << init_query_metadata;
+        qInfo() << "Init db (hashes): " << init_query_hashes;
+
+        DbUtils::execQuery(storage_db, init_query_metadata);
+        DbUtils::execQuery(storage_db, init_query_hashes);
+    }
 
     ui->setupUi(this);
 
@@ -254,7 +276,7 @@ void MainWindow::onStartScanButtonClicked() {
     }
 
     if(scan_modes.at(currentMode).request_function && !scan_modes.at(currentMode).request_function(this)) {
-        displayWarning("Invalid configuration, will not do anyting");
+        displayWarning("Nothing to do");
         return;
     }
 
@@ -412,9 +434,11 @@ QStringList MainWindow::callMultiDirSelectionDialogue() {
        t->setSelectionMode(QAbstractItemView::MultiSelection);
     }
 
-    w.exec();
-
-    return w.selectedFiles();
+    if(w.exec() == QDialog::Accepted){
+        return w.selectedFiles();
+    } else {
+        return {};
+    }
 }
 
 QString MainWindow::callDirSelectionDialogue(const QString &title) {
@@ -440,6 +464,9 @@ void MainWindow::setCurrentTask(const QString &status) {
 }
 
 void MainWindow::appendToLog(const QString &msg, bool error) {
+    if(!this_window) {
+        return;
+    }
     if(QThread::currentThread() == this_window->thread()) {
         if(error) {
             this_window->ui->log_text->insertHtml(msg);
@@ -518,7 +545,16 @@ bool MainWindow::startScanAsync() {
         files_size_all += QFile(file.full_path).size();
     }
 
-    scan_modes.at(currentMode).process_function(this);
+    // open a connection from this thread
+    QSqlDatabase storage_db = DbUtils::openDbConnection();
+    storage_db.transaction();
+    qInfo() << "Started db transaction";
+
+    scan_modes.at(currentMode).process_function(this, storage_db);
+
+    storage_db.commit();
+    storage_db.close();
+    qInfo() << "Db commit";
     return true;
 }
 
@@ -531,36 +567,39 @@ void MainWindow::addEnumeratedFile(const QString& file) {
     unique_files.push_back({file, fileInfo.fileName(), fileInfo.suffix().toLower(), file_r.size()});
 };
 
-void MainWindow::hashAllFiles() {
+void MainWindow::hashAllFiles(QSqlDatabase db) {
      for (auto& u_file: unique_files){
          processed_files ++;
          files_size_processed += u_file.size_bytes;
          setCurrentTask(QString("Hashing file: %1").arg(u_file.full_path));
-         u_file.computeHash();
+         u_file.loadHash(db);
      }
 }
 
-void MainWindow::hashCompare() {
-    hashAllFiles();
-}
+void MainWindow::hashCompare(QSqlDatabase db) {
+    hashAllFiles(db);
 
-void MainWindow::nameCompare() {
 
-}
-
-void MainWindow::autoDedupeMove() {
-    hashAllFiles();
-}
-
-void MainWindow::autoDedupeRename() {
-    hashAllFiles();
-}
-
-void MainWindow::exifRename() {
 
 }
 
-void MainWindow::showStats() {
+void MainWindow::nameCompare(QSqlDatabase) {
+
+}
+
+void MainWindow::autoDedupeMove(QSqlDatabase db) {
+    hashAllFiles(db);
+}
+
+void MainWindow::autoDedupeRename(QSqlDatabase db) {
+    hashAllFiles(db);
+}
+
+void MainWindow::exifRename(QSqlDatabase) {
+
+}
+
+void MainWindow::showStats(QSqlDatabase db) {
 
     etaMode = ITEM_BASED;
 
@@ -577,7 +616,7 @@ void MainWindow::showStats() {
         setCurrentTask(QString("Gathering information about: %1").arg(file.full_path));
 
         // load metadata
-        file.loadMetadata(ex_tool, selectedMetaFields);
+        file.loadMetadata(ex_tool, db);
 
         // iterate through name-array pairs
         for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
@@ -631,9 +670,9 @@ void MainWindow::exifRename_display() {
 bool MainWindow::showStats_request() {
     selection_dialogue = new Metadata_selection_dialogue(this);
     selection_dialogue->setModal(true);
-    selection_dialogue->exec();
+    int code = selection_dialogue->exec();
     selectedMetaFields = selection_dialogue->getSelected();
-    return !selectedMetaFields.empty();
+    return !selectedMetaFields.empty() && code == QDialog::Accepted;
 }
 
 void MainWindow::showStats_display() {

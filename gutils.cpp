@@ -180,3 +180,33 @@ QString millisecondsToReadable(quint64 ms) {
 QString timeSinceTimestamp(quint64 ms) {
     return millisecondsToReadable(QDateTime::currentMSecsSinceEpoch() - ms);
 };
+
+
+
+bool DbUtils::execQuery(QSqlQuery query) {
+    if(!query.exec()) {
+        qCritical() << query.lastError() << " query: " << query.lastQuery();
+        return false;
+    }
+    return true;
+}
+
+bool DbUtils::execQuery(QSqlDatabase db, QString query_str) {
+    QSqlQuery query(db);
+    if(!query.exec(query_str)) {
+        qCritical() << query.lastError() << " query: " << query.lastQuery();
+        return false;
+    }
+    return true;
+}
+
+QSqlDatabase DbUtils::openDbConnection() {
+    // make a new connaction with current thread id
+    QSqlDatabase storage_db = QSqlDatabase::addDatabase("QSQLITE", QString("conn_%1").arg((uintptr_t)QThread::currentThread()));
+    qInfo() << "Opened db connection " << storage_db.connectionName();
+    storage_db.setDatabaseName(QDir(QApplication::applicationDirPath()).filePath("index.db"));
+    if(!storage_db.open()) {
+        qCritical() << storage_db.lastError();
+    }
+    return storage_db;
+}

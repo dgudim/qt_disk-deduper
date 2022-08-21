@@ -1,4 +1,5 @@
 #include "stats_dialog.h"
+#include "gutils.h"
 #include "ui_stats_dialog.h"
 
 class TableNumberItem : public QTableWidgetItem {

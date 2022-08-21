@@ -8,8 +8,12 @@
 #include <QMap>
 #include <QDataStream>
 
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QSqlRecord>
+
 #include "ExifTool.h"
-#include "gutils.h"
 
 enum MediaType {
     UNKNOWN,
@@ -29,13 +33,8 @@ struct Countable_qstring {
         this->string = string;
     }
 
-    Countable_qstring (const QString& string, quint32 count, qint64 total_size_bytes, double count_percentage = 0, double size_percentage = 0) {
-        this->string = string;
-        this->count = count;
-        this->total_size_bytes = total_size_bytes;
-        this->count_percentage = count_percentage;
-        this->size_percentage = size_percentage;
-    }
+    Countable_qstring (const QString& string, quint32 count, qint64 total_size_bytes, double count_percentage = 0, double size_percentage = 0)
+        : string(string), count(count), count_percentage(count_percentage), total_size_bytes(total_size_bytes), size_percentage(size_percentage) {};
 
     bool operator==(const Countable_qstring &other) const{
         return string == other.string;
@@ -48,25 +47,20 @@ struct Countable_qstring {
 
 struct File {
     QString full_path;
+    QString path_without_name;
     QString name;
     qint64 size_bytes;
     QString extension;
     QString hash = "";
     QMap<QString, QString> metadata;
 
-    File (const QString& full_path, const QString& name, const QString& extension, qint64 size_bytes) {
-        this->full_path = full_path;
-        this->name = name;
-        this->extension = extension;
-        this->size_bytes = size_bytes;
+    File (const QString& full_path, const QString& name, const QString& extension, qint64 size_bytes)
+        : full_path(full_path), name(name), size_bytes(size_bytes), extension(extension) {
         metadata.insert("extension", extension);
     }
 
-    void loadMetadata(ExifTool *ex_tool, const QVector<QString>& selectedMetaFields);
-
-    void computeHash() {
-        hash = getFileHash(full_path);
-    }
+    void loadMetadata(ExifTool *ex_tool, QSqlDatabase db);
+    void loadHash(QSqlDatabase db);
 
     bool operator==(const File &other) const {
         return full_path == other.full_path;
@@ -76,32 +70,14 @@ struct File {
         return full_path < other.full_path;
     }
 
-    QDataStream& operator<<(QDataStream &out) {
-        out << full_path;
-        out << name;
-        out << size_bytes;
-        out << extension;
-        out << hash;
-        out << metadata;
-        out << metadata_loaded;
-
-        return out;
-    }
-
-    QDataStream& operator>>(QDataStream &in) {
-        in >> full_path;
-        in >> name;
-        in >> size_bytes;
-        in >> extension;
-        in >> hash;
-        in >> metadata;
-        in >> metadata_loaded;
-
-        return in;
-    }
-
 private:
     bool metadata_loaded = false;
+
+    void saveHashToDb(QSqlDatabase db);
+    void saveMetadataToDb(QSqlDatabase db);
+
+    bool loadHashFromDb(QSqlDatabase db);
+    bool loadMetadataFromDb(QSqlDatabase db);
 };
 
 QList<QString> getMetaFieldsList();
@@ -115,12 +91,8 @@ struct StatsContainer {
 
     StatsContainer(){};
 
-    StatsContainer (const QVector<QPair<QString, QVector<Countable_qstring>>>& meta_fields_stats,
-                    int total_files, quint64 total_size){
-        this->meta_fields_stats = meta_fields_stats;
-        this->total_files = total_files;
-        this->total_size = total_size;
-    }
+    StatsContainer (const QVector<QPair<QString, QVector<Countable_qstring>>>& meta_fields_stats, int total_files, quint64 total_size)
+        : total_files(total_files), total_size(total_size), meta_fields_stats(meta_fields_stats) {}
 };
 
 #endif // DATATYPES_H

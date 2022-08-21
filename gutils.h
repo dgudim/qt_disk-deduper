@@ -3,12 +3,20 @@
 
 #include <chrono>
 
+#include <QApplication>
+
 #include <QString>
 #include <QStringList>
 #include <QDate>
 #include <QFile>
 #include <QDirIterator>
 #include <QtDebug>
+
+#include <QThread>
+
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QSqlDatabase>
 
 #include <functional>
 #include <fstream>
@@ -47,5 +55,15 @@ quint64 readableToBytes(QString str);
 QString millisecondsToReadable(quint64 ms);
 
 QString timeSinceTimestamp(quint64 ms);
+
+QT_BEGIN_NAMESPACE
+
+namespace DbUtils{
+    bool execQuery(QSqlQuery query);
+    bool execQuery(QSqlDatabase db, QString query_str);
+    QSqlDatabase openDbConnection();
+};
+
+QT_END_NAMESPACE
 
 #endif // GUTILS_H

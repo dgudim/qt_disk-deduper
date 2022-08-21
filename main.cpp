@@ -35,6 +35,10 @@ void captureMessageOutput(QtMsgType type, const QMessageLogContext &context, con
 int main(int argc, char *argv[]) {
     qInstallMessageHandler(captureMessageOutput);
     QApplication a(argc, argv);
+
+    a.setApplicationName("disk_deduper_qt");
+    a.setApplicationDisplayName("Disk deduper");
+
     MainWindow w;
     w.show();
     return a.exec();
