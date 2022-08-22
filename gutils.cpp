@@ -4,7 +4,7 @@
 
 QMap<QString, quint64> size_multipliers = {{"b", 1}, {"Kb", 1024}, {"Mb", 1048576}, {"Gb", 1073741824}};
 
-void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
+void FileUtils::walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
              ExtenstionFilterState extFilterState, std::function<void(QString)> callback) {
 
     bool ext_filter_enabled = extFilterState != ExtenstionFilterState::DISABLED;
@@ -32,7 +32,7 @@ void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStr
     }
 }
 
-QString getFileHash(const QString& full_path) {
+QString FileUtils::getFileHash(const QString& full_path) {
     QFile file = QFile(full_path);
     if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error("Failed opening " + full_path.toStdString());
     QString hash = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Algorithm::Sha256).toHex();
@@ -40,7 +40,20 @@ QString getFileHash(const QString& full_path) {
     return hash;
 }
 
-bool stringStartsWith(const std::string& string, const std::string& prefix) {
+// make sure to sort the array before passing
+QString FileUtils::getFileGroupFingerprint(const QVector<File>& group) {
+    QString combined_dir;
+    for(const auto& file: group) {
+        combined_dir += file.path_without_name;
+    }
+    return StringUtils::getStringHash(combined_dir);
+};
+
+QString StringUtils::getStringHash(const QString& string) {
+    return QCryptographicHash::hash(string.toUtf8(), QCryptographicHash::Algorithm::Sha256).toHex();
+}
+
+bool StringUtils::stringStartsWith(const std::string& string, const std::string& prefix) {
     if (prefix.size() > string.size()) {
         return false;
     }
@@ -55,7 +68,7 @@ bool stringStartsWith(const std::string& string, const std::string& prefix) {
     return true;
 }
 
-bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list) {
+bool StringUtils::stringStartsWithAny(const std::string& str, std::vector<std::string>& list) {
     for(auto& item: list) {
         if(stringStartsWith(str, item)){
             return true;
@@ -64,7 +77,7 @@ bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list)
     return false;
 }
 
-quint64 getDiskReadSizeB() {
+quint64 FileUtils::getDiskReadSizeB() {
 
     quint64 sectors_read = 0;
 
@@ -85,7 +98,7 @@ quint64 getDiskReadSizeB() {
 
             //only get whole drives, not partitions
             if(stat_index == 2){
-                if( stringStartsWithAny(temp, discs)) {
+                if(StringUtils::stringStartsWithAny(temp, discs)) {
                     break;
                 } else {
                     discs.push_back(temp);
@@ -104,7 +117,7 @@ quint64 getDiskReadSizeB() {
     return sectors_read * 512;
 }
 
-quint64 getMemUsedKb() {
+quint64 FileUtils::getMemUsedKb() {
 
     quint64 total_mem_all = 0;
     quint64 total_mem_free = 0;
@@ -113,8 +126,8 @@ quint64 getMemUsedKb() {
     std::string line;
 
     while (getline(meminfo, line)) {
-        bool available = stringStartsWith(line, "MemAvailable") || stringStartsWith(line, "SwapFree");
-        bool total = stringStartsWith(line, "MemTotal") || stringStartsWith(line, "SwapTotal");
+        bool available = StringUtils::stringStartsWith(line, "MemAvailable") || StringUtils::stringStartsWith(line, "SwapFree");
+        bool total = StringUtils::stringStartsWith(line, "MemTotal") || StringUtils::stringStartsWith(line, "SwapTotal");
         // get RAM available                            get SWAP available
         if (available || total) {
             std::string temp;
@@ -133,7 +146,7 @@ quint64 getMemUsedKb() {
             }
         }
         // we don't need subsequent values
-        if (stringStartsWith(line, "SwapFree") || stringStartsWith(line, "Dirty")){
+        if (StringUtils::stringStartsWith(line, "SwapFree") || StringUtils::stringStartsWith(line, "Dirty")){
             break;
         }
     }
@@ -141,7 +154,7 @@ quint64 getMemUsedKb() {
     return total_mem_all - total_mem_free;
 };
 
-QString bytesToReadable(quint64 b) {
+QString FileUtils::bytesToReadable(quint64 b) {
     double kb = b / 1024.0;
     double mb = kb / 1024.0;
     double gb = mb / 1024.0;
@@ -157,14 +170,14 @@ QString bytesToReadable(quint64 b) {
     return QString("%1 b").arg(b);
 }
 
-quint64 readableToBytes(QString str) {
+quint64 FileUtils::readableToBytes(const QString &str) {
     QStringList split = str.split(" ");
     return split[0].toDouble() * size_multipliers[split[1]];
 }
 
 #pragma endregion}
 
-QString millisecondsToReadable(quint64 ms) {
+QString TimeUtils::millisecondsToReadable(quint64 ms) {
 
     QString time_str = "%1h %2m %3s";
     int seconds = ms / 1000;
@@ -177,7 +190,7 @@ QString millisecondsToReadable(quint64 ms) {
     return time_str.arg(hours).arg(minutes).arg(seconds);
 }
 
-QString timeSinceTimestamp(quint64 ms) {
+QString TimeUtils::timeSinceTimestamp(quint64 ms) {
     return millisecondsToReadable(QDateTime::currentMSecsSinceEpoch() - ms);
 };
 
@@ -191,7 +204,7 @@ bool DbUtils::execQuery(QSqlQuery query) {
     return true;
 }
 
-bool DbUtils::execQuery(QSqlDatabase db, QString query_str) {
+bool DbUtils::execQuery(QSqlDatabase db, const QString& query_str) {
     QSqlQuery query(db);
     if(!query.exec(query_str)) {
         qCritical() << query.lastError() << " query: " << query.lastQuery();

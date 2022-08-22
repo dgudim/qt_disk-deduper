@@ -1,6 +1,8 @@
 #include "datatypes.h"
 #include "gutils.h"
 #include "meta_converters.h"
+#include <QBuffer>
+#include <QIcon>
 
 QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
 
@@ -64,7 +66,6 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
     QMap<QString, QString> gathered_values;
 
     TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str());
-
     if (info) {
         for (TagInfo *i = info; i; i = i->next) {
             QString name = QString::fromUtf8(i->name);
@@ -107,9 +108,35 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
 
 void File::loadHash(QSqlDatabase db) {
     if(!loadHashFromDb(db)) {
-        hash = getFileHash(full_path);
+        hash = FileUtils::getFileHash(full_path);
         saveHashToDb(db);
     }
+}
+
+void File::loadThumbnail(QSqlDatabase db) {
+    if(!loadThumbnailFromDb(db)) {
+
+        QPixmap thumbnail = QIcon(full_path).pixmap(200, 200);
+        QBuffer inBuffer( &thumbnail_raw );
+        inBuffer.open( QIODevice::WriteOnly );
+        thumbnail.save( &inBuffer, "JPG" );
+
+        saveThumbnailToDb(db);
+    }
+}
+
+void File::saveThumbnailToDb(QSqlDatabase db) {
+    QString insertionString = QString("INSERT OR REPLACE INTO thumbnails (full_path, size, thumbnail) "
+                                      "VALUES(:full_path, :size, :thumbnail)");
+
+    QSqlQuery query(db);
+    query.prepare(insertionString);
+
+    query.bindValue(":full_path", full_path);
+    query.bindValue(":size", size_bytes);
+    query.bindValue(":thumbnail", thumbnail_raw);
+
+    DbUtils::execQuery(query);
 }
 
 void File::saveHashToDb(QSqlDatabase db) {
@@ -187,6 +214,20 @@ bool File::loadHashFromDb(QSqlDatabase db) {
 
     if(query.first() && query.value(1) == size_bytes) {
         hash = query.value(2).toString();
+        return true;
+    }
+    return false;
+}
+
+bool File::loadThumbnailFromDb(QSqlDatabase db) {
+    QSqlQuery query(db);
+    query.prepare(QString("SELECT full_path, size, thumbnail FROM thumbnails WHERE full_path = ?"));
+    query.bindValue(0, full_path);
+
+    DbUtils::execQuery(query);
+
+    if(query.first() && query.value(1) == size_bytes) {
+        thumbnail_raw = query.value(2).toByteArray();
         return true;
     }
     return false;

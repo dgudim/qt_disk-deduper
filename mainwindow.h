@@ -31,6 +31,7 @@
 #include "metadata_selection_dialogue.h"
 #include "ExifTool.h"
 #include "stats_dialog.h"
+#include "dupe_results_dialog.h"
 #include "folder_list_item.h"
 
 QT_BEGIN_NAMESPACE
@@ -38,7 +39,7 @@ namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 enum EtaMode {
-    OFF,
+    DISABLED,
     SPEED_BASED,
     ITEM_BASED
 };
@@ -128,12 +129,15 @@ private:
     quint64 program_start_time = 0;
     quint64 scan_start_time = 0;
     bool scan_active = false;
-    EtaMode etaMode = OFF;
+    EtaMode etaMode = DISABLED;
     int currentMode;
     quint32 processed_files = 0; // max 4294967295
     quint32 previous_processed_files = 0; // for measuring speed
+    quint32 duplicate_files = 0;
+    quint32 preloaded_files = 0;
     float averageFilesPerSecond = 0;
     quint64 files_size_all = 0;
+    quint64 files_size_dupes = 0;
     quint64 files_size_processed = 0;
 
     QPieSeries *series;
@@ -154,6 +158,7 @@ private:
 
     // dedupe results
     QVector<QVector<QVector<File>>> dedupe_resuts;
+    Dupe_results_dialog *dupe_results_dialog;
 
     // utility functions
     template<typename T>

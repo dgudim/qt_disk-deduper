@@ -5,13 +5,15 @@
 enum PiechartIndex {
     ALL_FILES = 0,
     SCANNED_FILES = 1,
-    DUPLICATE_FILES = 2
+    DUPLICATE_FILES = 2,
+    PRELOADED_FILES = 3
 };
 
 QVector<QPair<QString, QColor>> piechart_config = {
     {"A: %1", QColor(1, 184, 170)},
     {"Sc: %1", QColor(3, 171, 51)},
-    {"Dup: %1", QColor(181, 113, 4)}};
+    {"Dup: %1", QColor(181, 113, 4)},
+    {"Pr: %1", QColor(191, 140, 0)}};
 
 enum ScanMode {
     HASH_COMPARE = 0,
@@ -61,12 +63,15 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
         QString init_query_metadata = QString("CREATE TABLE IF NOT EXISTS metadata (full_path TEXT PRIMARY KEY, size INTEGER %1)").arg(columns);
         QString init_query_hashes = "CREATE TABLE IF NOT EXISTS hashes (full_path TEXT PRIMARY KEY, size INTEGER, hash TEXT)";
+        QString init_query_thumbnails = "CREATE TABLE IF NOT EXISTS thumbnails (full_path TEXT PRIMARY KEY, size INTEGER, thumbnail BLOB)";
 
         qInfo() << "Init db (metadata): " << init_query_metadata;
         qInfo() << "Init db (hashes): " << init_query_hashes;
+        qInfo() << "Init db (thumbnails): " << init_query_thumbnails;
 
         DbUtils::execQuery(storage_db, init_query_metadata);
         DbUtils::execQuery(storage_db, init_query_hashes);
+        DbUtils::execQuery(storage_db, init_query_thumbnails);
     }
 
     ui->setupUi(this);
@@ -78,7 +83,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     // setup initial values
     program_start_time = QDateTime::currentMSecsSinceEpoch();
-    lastMeasuredDiskRead = getDiskReadSizeB();
+    lastMeasuredDiskRead = FileUtils::getDiskReadSizeB();
 
     setCurrentTask("Idle");
 
@@ -146,7 +151,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     connect(ui->mode_combo_box, SIGNAL(currentIndexChanged(int)), this, SLOT(onCurrentModeChanged(int)));
 
     // load extension filter state
-    Qt::CheckState ext_filter_state = (Qt::CheckState)settings.value("ext_filter_state", ExtenstionFilterState::DISABLED).toInt();
+    Qt::CheckState ext_filter_state = (Qt::CheckState)settings.value("ext_filter_state", FileUtils::DISABLED).toInt();
     ui->extention_filter_enabled_checkbox->setCheckState(ext_filter_state);
     onExtentionCheckboxStateChanged(ext_filter_state);
 
@@ -176,24 +181,27 @@ MainWindow::~MainWindow() {
 
 void MainWindow::updateLoop100Ms() {
      // update uptime
-    ui->uptime_label->setText(QString("Uptime: %1").arg(timeSinceTimestamp(program_start_time)));
+    ui->uptime_label->setText(QString("Uptime: %1").arg(TimeUtils::timeSinceTimestamp(program_start_time)));
 
     // update piechart
     series->slices().at(PiechartIndex::ALL_FILES)->setValue(unique_files.length() - processed_files);
-    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files);
+    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files - duplicate_files);
+    series->slices().at(PiechartIndex::DUPLICATE_FILES)->setValue(duplicate_files - preloaded_files);
+    series->slices().at(PiechartIndex::PRELOADED_FILES)->setValue(preloaded_files);
+
     for (int i = 0; i < series->count(); i++){
         auto slice = series->slices().at(i);
         slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
     }
 
-    if (etaMode != OFF) {
-        ui->time_passed_label->setText(QString("Time passed: %1").arg(timeSinceTimestamp(scan_start_time)));
+    if (etaMode != DISABLED) {
+        ui->time_passed_label->setText(QString("Time passed: %1").arg(TimeUtils::timeSinceTimestamp(scan_start_time)));
 
         float averagePerSec = qMax(etaMode == SPEED_BASED ? averageDiskReadSpeed : averageFilesPerSecond, 0.001f);
         quint64 all = etaMode == SPEED_BASED ? files_size_all : unique_files.length() ;
         quint64 processed = etaMode == SPEED_BASED ? files_size_processed : processed_files;
 
-        QString eta_arg = QString("Eta: %1").arg(millisecondsToReadable((all - processed) / averagePerSec * 1000));
+        QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / averagePerSec * 1000));
 
         ui->eta_label->setText(eta_arg);
         setWindowTitle(QString("Disk deduper (%1%, %2 left)").arg(processed / (double)all * 100).arg(eta_arg));
@@ -203,7 +211,7 @@ void MainWindow::updateLoop100Ms() {
 void MainWindow::updateLoop2s() {
 
     // update disk usage
-    auto disk_read = getDiskReadSizeB();
+    auto disk_read = FileUtils::getDiskReadSizeB();
 
     // floating average
     averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
@@ -212,11 +220,11 @@ void MainWindow::updateLoop2s() {
     averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((processed_files - previous_processed_files) / 2.0) * 0.1;
     previous_processed_files = processed_files;
 
-    ui->disk_read_label->setText(QString("Disk read: %1/s").arg(bytesToReadable(averageDiskReadSpeed)));
+    ui->disk_read_label->setText(QString("Disk read: %1/s").arg(FileUtils::bytesToReadable(averageDiskReadSpeed)));
     ui->items_per_sec_label->setText(QString("Items per sec: %1/s").arg(averageFilesPerSecond));
 
     // update memory usage
-    ui->memory_usage_label->setText(QString("Memory usage: %1").arg(bytesToReadable(getMemUsedKb() * 1024)));
+    ui->memory_usage_label->setText(QString("Memory usage: %1").arg(FileUtils::bytesToReadable(FileUtils::getMemUsedKb() * 1024)));
 
 }
 
@@ -245,13 +253,13 @@ void MainWindow::onSetDupesFolderClicked() {
 void MainWindow::onExtentionCheckboxStateChanged(int state) {
 
     switch(state) {
-        case ExtenstionFilterState::DISABLED:
+        case FileUtils::DISABLED:
             ui->extention_filter_enabled_checkbox->setText("Extension filter disabled");
             break;
-        case ExtenstionFilterState::ENABLED_BLACK:
+        case FileUtils::ENABLED_BLACK:
             ui->extention_filter_enabled_checkbox->setText("Extension filter enabled (blacklist)");
             break;
-        case ExtenstionFilterState::ENABLED_WHITE:
+        case FileUtils::ENABLED_WHITE:
             ui->extention_filter_enabled_checkbox->setText("Extension filter enabled (whitelist)");
             break;
     }
@@ -285,6 +293,9 @@ void MainWindow::onStartScanButtonClicked() {
     files_size_processed = 0;
     processed_files = 0;
     previous_processed_files = 0;
+    duplicate_files = 0;
+    preloaded_files = 0;
+    files_size_dupes = 0;
     unique_files.clear();
     averageFilesPerSecond = 0;
 
@@ -308,7 +319,7 @@ void MainWindow::onStartScanButtonClicked() {
     }
 
     setUiDisabled(false);
-    etaMode = OFF;
+    etaMode = DISABLED;
     setCurrentTask("Idle");
 }
 
@@ -511,7 +522,7 @@ bool MainWindow::startScanAsync() {
 
     QStringList blacklisted_dirs;
 
-    ExtenstionFilterState extFilterState = (ExtenstionFilterState)ui->extention_filter_enabled_checkbox->checkState();
+    FileUtils::ExtenstionFilterState extFilterState = (FileUtils::ExtenstionFilterState)ui->extention_filter_enabled_checkbox->checkState();
     QStringList listed_exts;
 
     for(int i = 0; i < ui->folders_to_scan_list->count(); i++) {
@@ -521,7 +532,7 @@ bool MainWindow::startScanAsync() {
         }
     }
 
-    if(extFilterState != ExtenstionFilterState::DISABLED) {
+    if(extFilterState != FileUtils::DISABLED) {
         listed_exts = getAllStringsFromList(ui->extension_filter_list);
     }
 
@@ -564,14 +575,14 @@ void MainWindow::addEnumeratedFile(const QString& file) {
     if(unique_files.size() % 100 == 0) {
         setCurrentTask(QString("Enumerating file: %1").arg(file));
     }
-    unique_files.push_back({file, fileInfo.fileName(), fileInfo.suffix().toLower(), file_r.size()});
+    unique_files.push_back({file, fileInfo.absolutePath(), fileInfo.fileName(), fileInfo.suffix().toLower(), file_r.size()});
 };
 
 void MainWindow::hashAllFiles(QSqlDatabase db) {
      for (auto& u_file: unique_files){
          processed_files ++;
          files_size_processed += u_file.size_bytes;
-         setCurrentTask(QString("Hashing file: %1").arg(u_file.full_path));
+         setCurrentTask(QString("Hashing file: %1").arg(u_file));
          u_file.loadHash(db);
      }
 }
@@ -579,8 +590,84 @@ void MainWindow::hashAllFiles(QSqlDatabase db) {
 void MainWindow::hashCompare(QSqlDatabase db) {
     hashAllFiles(db);
 
+    // map of groups of files with the same hash
+    QMap<QString, QVector<File>> duplicate_file_groups;
 
+    // we group all files with the same hash
+    for(auto& file: unique_files) {
+        setCurrentTask(QString("Comparing: %1").arg(file));
+        if(duplicate_file_groups.contains(file.hash)) {
+            duplicate_files ++;
+            files_size_dupes += file.size_bytes;
+        }
+        duplicate_file_groups[file.hash].append(file);
+    }
 
+    for(auto& group: duplicate_file_groups) {
+        for(auto& file: group) {
+            setCurrentTask(QString("Generating preview for: %1").arg(file));
+            file.loadThumbnail(db);
+            preloaded_files ++;
+        }
+    }
+
+    // map of fingerprint-to-groups, fingerprint will be the same in two groups if files in 2 groups group have the same dupe locations
+
+    // example
+    // group1: /testdir/image1.png, /testdir2/image.png, /testdir3/image3.png
+    // group2: /testdir3/image1.png, /testdir/image.png, /testdir2/image3.png
+    // fingerprint will be the same
+
+    QMap<QString, QVector<QVector<File>>> duplicate_file_groups_fingerprintMatched;
+
+    const QList<QVector<File>> unique_groups = duplicate_file_groups.values();
+
+    // we group all groups bigger than 1 (at least one duplicate) with the same fingerprint
+    for(const auto& group: unique_groups) {
+        if(group.size() > 1) {
+            duplicate_file_groups_fingerprintMatched[FileUtils::getFileGroupFingerprint(group)].append(group);
+        }
+    }
+
+    // transformed map
+
+    // input (dedupe_resuts_intermediate)
+    //QList(
+    //QVector(
+    //    QVector("/home/kloud/Downloads/test1/pict1___.png", "/home/kloud/Downloads/test2/pict1___.png"),
+    //    QVector("/home/kloud/Downloads/test1/pict03d.png", "/home/kloud/Downloads/test2/pict03d.png"),
+    //    QVector("/home/kloud/Downloads/test1/pict2--.png", "/home/kloud/Downloads/test2/pict2--.png"),
+    //    QVector("/home/kloud/Downloads/test1/pict33.png", "/home/kloud/Downloads/test2/pict33.png"),
+    //    QVector("/home/kloud/Downloads/test1/pict0__.png", "/home/kloud/Downloads/test2/pict0__.png")
+    //)
+    //)
+    // output (dedupe_resuts)
+    //QList(
+    //QVector(
+    //    QVector("/home/kloud/Downloads/test1/pict1___.png", "/home/kloud/Downloads/test1/pict03d.png", "/home/kloud/Downloads/test1/pict2--.png", "/home/kloud/Downloads/test1/pict33.png", "/home/kloud/Downloads/test1/pict0__.png"),
+    //    QVector( "/home/kloud/Downloads/test2/pict1___.png", "/home/kloud/Downloads/test2/pict03d.png", "/home/kloud/Downloads/test2/pict2--.png", "/home/kloud/Downloads/test2/pict33.png", "/home/kloud/Downloads/test2/pict0__.png")
+    //)
+    //)
+
+    const QList<QVector<QVector<File>>> dedupe_resuts_intermediate = duplicate_file_groups_fingerprintMatched.values();
+
+    dedupe_resuts.clear();
+    for(const auto& group_of_groups: dedupe_resuts_intermediate) {
+
+        QVector<QVector<File>> rotated_vector;
+
+        for(const auto& group: group_of_groups) {
+            for(int i = 0; i < group.size(); i++) {
+                if(rotated_vector.size() > i){
+                    rotated_vector[i].append(group.at(i));
+                } else {
+                    rotated_vector.append({group.at(i)});
+                }
+            }
+        }
+
+        dedupe_resuts.append(rotated_vector);
+    }
 }
 
 void MainWindow::nameCompare(QSqlDatabase) {
@@ -620,7 +707,7 @@ void MainWindow::showStats(QSqlDatabase db) {
 
         // iterate through name-array pairs
         for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
-            QString& metadata_value = file.metadata[metadata_key];
+            const QString& metadata_value = file.metadata.value(metadata_key);
 
             // if value is already present (for instance extension "png") add to it, othrewise append
             if (metadata_array.contains(metadata_value)) {
@@ -648,7 +735,14 @@ void MainWindow::showStats(QSqlDatabase db) {
 }
 
 void MainWindow::hashCompare_display() {
-
+    if(dedupe_resuts.empty()) {
+       displayWarning("No dupes found");
+       return;
+    }
+    dupe_results_dialog = new Dupe_results_dialog(this, dedupe_resuts, duplicate_files, files_size_dupes);
+    dupe_results_dialog->setModal(true);
+    hide();
+    dupe_results_dialog->show();
 }
 
 void MainWindow::nameCompare_display() {

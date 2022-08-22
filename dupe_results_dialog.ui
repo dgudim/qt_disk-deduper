@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>dupes_list</class>
- <widget class="QDialog" name="dupes_list">
+ <class>Dupe_results_dialog</class>
+ <widget class="QDialog" name="Dupe_results_dialog">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>686</width>
-    <height>403</height>
+    <width>956</width>
+    <height>312</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -40,20 +40,10 @@
     </widget>
    </item>
    <item>
-    <widget class="QScrollArea" name="scrollArea">
-     <property name="widgetResizable">
-      <bool>true</bool>
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="currentIndex">
+      <number>-1</number>
      </property>
-     <widget class="QWidget" name="res_content_area">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>0</y>
-        <width>678</width>
-        <height>374</height>
-       </rect>
-      </property>
-     </widget>
     </widget>
    </item>
   </layout>

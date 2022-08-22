@@ -1,6 +1,8 @@
 #ifndef GUTILS_H
 #define GUTILS_H
 
+#include "datatypes.h"
+
 #include <chrono>
 
 #include <QApplication>
@@ -27,40 +29,63 @@
 
 #pragma region File utils {
 
-enum ExtenstionFilterState {
-    DISABLED,
-    ENABLED_BLACK,
-    ENABLED_WHITE
+QT_BEGIN_NAMESPACE
+
+namespace FileUtils {
+
+    enum ExtenstionFilterState {
+        DISABLED,
+        ENABLED_BLACK,
+        ENABLED_WHITE
+    };
+
+    void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
+                 ExtenstionFilterState extFilterState, std::function<void(QString)> callback);
+
+    QString getFileHash(const QString& full_path);
+    quint64 getDiskReadSizeB();
+
+    quint64 getMemUsedKb();
+
+    QString bytesToReadable(quint64 kb);
+    quint64 readableToBytes(const QString &str);
+
+    QString getFileGroupFingerprint(const QVector<File>& group);
+
 };
 
-void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
-             ExtenstionFilterState extFilterState, std::function<void(QString)> callback);
+QT_END_NAMESPACE
 
-QString getFileHash(const QString& full_path);
 
-bool stringStartsWith(const std::string& string, const std::string& prefix);
+QT_BEGIN_NAMESPACE
 
-bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list);
+namespace StringUtils {
+    QString getStringHash(const QString& string);
 
-quint64 getDiskReadSizeB();
+    bool stringStartsWith(const std::string& string, const std::string& prefix);
+    bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list);
+};
 
-quint64 getMemUsedKb();
+QT_END_NAMESPACE
 
-QString bytesToReadable(quint64 kb);
 
-quint64 readableToBytes(QString str);
 
-#pragma endregion}
+QT_BEGIN_NAMESPACE
 
-QString millisecondsToReadable(quint64 ms);
+namespace TimeUtils{
+    QString millisecondsToReadable(quint64 ms);
+    QString timeSinceTimestamp(quint64 ms);
+};
 
-QString timeSinceTimestamp(quint64 ms);
+QT_END_NAMESPACE
+
+
 
 QT_BEGIN_NAMESPACE
 
 namespace DbUtils{
     bool execQuery(QSqlQuery query);
-    bool execQuery(QSqlDatabase db, QString query_str);
+    bool execQuery(QSqlDatabase db, const QString &query_str);
     QSqlDatabase openDbConnection();
 };
 

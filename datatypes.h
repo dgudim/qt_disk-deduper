@@ -5,6 +5,8 @@
 #include <QVector>
 #include <QObject>
 
+#include <QPixmap>
+
 #include <QMap>
 #include <QDataStream>
 
@@ -52,15 +54,17 @@ struct File {
     qint64 size_bytes;
     QString extension;
     QString hash = "";
+    QByteArray thumbnail_raw;
     QMap<QString, QString> metadata;
 
-    File (const QString& full_path, const QString& name, const QString& extension, qint64 size_bytes)
-        : full_path(full_path), name(name), size_bytes(size_bytes), extension(extension) {
+    File (const QString& full_path, const QString& path_without_name, const QString& name, const QString& extension, qint64 size_bytes)
+        : full_path(full_path), path_without_name(path_without_name), name(name), size_bytes(size_bytes), extension(extension) {
         metadata.insert("extension", extension);
     }
 
     void loadMetadata(ExifTool *ex_tool, QSqlDatabase db);
     void loadHash(QSqlDatabase db);
+    void loadThumbnail(QSqlDatabase db);
 
     bool operator==(const File &other) const {
         return full_path == other.full_path;
@@ -70,14 +74,18 @@ struct File {
         return full_path < other.full_path;
     }
 
+    operator QString() const { return full_path; }
+
 private:
     bool metadata_loaded = false;
 
     void saveHashToDb(QSqlDatabase db);
     void saveMetadataToDb(QSqlDatabase db);
+    void saveThumbnailToDb(QSqlDatabase db);
 
     bool loadHashFromDb(QSqlDatabase db);
     bool loadMetadataFromDb(QSqlDatabase db);
+    bool loadThumbnailFromDb(QSqlDatabase db);
 };
 
 QList<QString> getMetaFieldsList();
