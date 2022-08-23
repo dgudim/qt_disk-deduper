@@ -1,8 +1,13 @@
 #include "datatypes.h"
 #include "gutils.h"
 #include "meta_converters.h"
+#include <QMimeDatabase>
+#include <QApplication>
+#include <QStyle>
 #include <QBuffer>
 #include <QIcon>
+#include <QMimeType>
+#include <QPainter>
 
 QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
 
@@ -113,15 +118,39 @@ void File::loadHash(QSqlDatabase db) {
     }
 }
 
+QMimeDatabase mime_database;
+
 void File::loadThumbnail(QSqlDatabase db) {
     if(!loadThumbnailFromDb(db)) {
 
-        QPixmap thumbnail = QIcon(full_path).pixmap(200, 200);
+        // try to get thumbnail directly from file
+        QPixmap icon_pix = QIcon(full_path).pixmap(200, 200);
+        bool save_to_db = true;
+
+        if(icon_pix.isNull()) {
+            save_to_db = false;
+            // try to get filetype icon from system theme
+
+            QIcon icon;
+            QList<QMimeType> mime_types = mime_database.mimeTypesForFileName(name);
+            for (int i = 0; i < mime_types.count() && icon.isNull(); i++) {
+                icon = QIcon::fromTheme(mime_types[i].iconName());
+            }
+
+            if (icon.isNull()) {
+                icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+            }
+
+            icon_pix = icon.pixmap(128, 128);
+        }
+
         QBuffer inBuffer( &thumbnail_raw );
         inBuffer.open( QIODevice::WriteOnly );
-        thumbnail.save( &inBuffer, "JPG" );
+        icon_pix.save( &inBuffer, "PNG" );
 
-        saveThumbnailToDb(db);
+        if(save_to_db){
+           saveThumbnailToDb(db);
+        }
     }
 }
 

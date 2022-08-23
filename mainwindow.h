@@ -38,10 +38,14 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-enum EtaMode {
+enum class EtaMode {
     DISABLED,
-    SPEED_BASED,
-    ITEM_BASED
+    ENABLED
+};
+
+enum class FileField {
+    HASH,
+    NAME
 };
 
 class MainWindow : public QMainWindow {
@@ -58,8 +62,7 @@ public:
     void exifRename(QSqlDatabase);
     void showStats(QSqlDatabase db);
 
-    void hashCompare_display();
-    void nameCompare_display();
+    void fileCompare_display();
     void autoDedupeMove_display();
     void autoDedupeRename_display();
     void exifRename_display();
@@ -115,6 +118,9 @@ private:
     QStringList callMultiDirSelectionDialogue();
     QString callTextDialogue(const QString &title, const QString &prompt);
 
+    template<FileField field>
+    void findDuplicateFiles(QSqlDatabase db);
+
     void addEnumeratedFile(const QString& file);
     void displayWarning(const QString &message);
 
@@ -129,16 +135,17 @@ private:
     quint64 program_start_time = 0;
     quint64 scan_start_time = 0;
     bool scan_active = false;
-    EtaMode etaMode = DISABLED;
+    EtaMode etaMode = EtaMode::DISABLED;
     int currentMode;
-    quint32 processed_files = 0; // max 4294967295
-    quint32 previous_processed_files = 0; // for measuring speed
-    quint32 duplicate_files = 0;
-    quint32 preloaded_files = 0;
+    qint32 processed_files = 0; // max 4294967295
+    qint32 previous_processed_files = 0; // for measuring speed
+    qint32 duplicate_files = 0;
+    qint32 preloaded_files = 0;
     float averageFilesPerSecond = 0;
     quint64 files_size_all = 0;
     quint64 files_size_dupes = 0;
     quint64 files_size_processed = 0;
+    quint64 files_size_preloaded = 0;
 
     QPieSeries *series;
 

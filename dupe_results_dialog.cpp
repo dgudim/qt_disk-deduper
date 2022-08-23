@@ -1,4 +1,7 @@
 #include "dupe_results_dialog.h"
+#include <QGraphicsOpacityEffect>
+#include <QPushButton>
+#include <QRadioButton>
 #include <QScrollArea>
 #include "ui_dupe_results_dialog.h"
 #include "gutils.h"
@@ -16,13 +19,15 @@ Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const QVector<QVector<
 
     int index = 0;
     for(const auto& groups: results) {
+       pButtonGroups button_groups;
+       button_groups.reset(new ButtonGroups());
+       button_groups_per_tab.append(button_groups);
        index++;
-       loadTab(QString("Group %1").arg(index), groups);
+       loadTab(QString("Group %1").arg(index), groups, button_groups);
     }
-
 }
 
-void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<File>>& list) {
+void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<File>>& list, pButtonGroups button_groups) {
 
     //create new tab
     QWidget* tab_container = new QWidget();
@@ -30,9 +35,20 @@ void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<Fil
     tab_contents->setSpacing(0);
     tab_contents->setContentsMargins(0, 0, 0, 0);
 
+    QPushButton* applyButton = new QPushButton("Keep selected, delete the rest", tab_container);
+    tab_contents->addWidget(applyButton);
+
+    int items_in_group = 0;
+    for(auto& group: list) {
+        items_in_group += group.size();
+    }
+    QLabel* stats_label = new QLabel(QString("Files in group: %1 / %2 (unique)").arg(items_in_group).arg(list[0].size()), tab_container);
+    tab_contents->addWidget(stats_label);
+
     // create new scroll area for items
     QScrollArea *scrollArea = new QScrollArea(tab_container);
     scrollArea->setWidgetResizable(true);
+    scrollArea->setMouseTracking(true);
     QWidget* scrollAreaWidgetContents = new QWidget();
 
     // create vertical layout for scroll area (this is where our items will reside)
@@ -40,17 +56,95 @@ void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<Fil
     verticalLayout_inner->setSpacing(3);
     verticalLayout_inner->setContentsMargins(3, 3, 3, 3);
 
+    int group_index = 0;
     for(const auto& group: list) {
         QHBoxLayout* groupContainer = new QHBoxLayout();
-        groupContainer->addWidget(new QLabel(group[0].path_without_name, scrollAreaWidgetContents));
+
+        QVBoxLayout* infoAndButtonContainer = new QVBoxLayout();
+        QPushButton* selectWholeGroupButton = new QPushButton("Select whole line", scrollAreaWidgetContents);
+        selectWholeGroupButton->setMaximumWidth(200);
+
+        connect(selectWholeGroupButton, &QPushButton::clicked, this,
+        [group_index, button_groups, list]() {
+            for(int file_index = 0; file_index < list[0].size(); file_index ++) {
+                button_groups->at(file_index)->buttons().at(group_index)->setChecked(true);
+            }
+        });
+
+        QLabel* path_label = new QLabel(group[0].path_without_name, scrollAreaWidgetContents);
+        path_label->setMaximumWidth(150);
+        path_label->setWordWrap(true);
+        infoAndButtonContainer->addWidget(path_label);
+        infoAndButtonContainer->addWidget(selectWholeGroupButton);
+        groupContainer->addLayout(infoAndButtonContainer);
+
+        int index = 0;
         for(const auto& file: group) {
+
+            QVBoxLayout* preview_container = new QVBoxLayout();
+
+            // construct 2 labels (preview and filename)
             QLabel *preview_label = new QLabel(scrollAreaWidgetContents);
+            preview_label->setDisabled(true);
+
+            QLabel* filename_label = new QLabel(file.name, scrollAreaWidgetContents);
+            filename_label->setDisabled(true);
+            filename_label->setMaximumWidth(preview_label->width());
+            filename_label->setWordWrap(true);
+            filename_label->setAlignment(Qt::AlignTop);
+
+            // load thumbnail
             QPixmap thumbnail;
             thumbnail.loadFromData(file.thumbnail_raw);
             preview_label->setPixmap(thumbnail);
-            groupContainer->addWidget(preview_label);
+            preview_container->addWidget(preview_label);
+
+
+
+            QRadioButton* selection_button = new QRadioButton("select", scrollAreaWidgetContents);
+            preview_container->addWidget(selection_button);
+
+            connect(selection_button, &QRadioButton::toggled, this,
+            [preview_label, filename_label](bool checked){
+                preview_label->setDisabled(!checked);
+                filename_label->setDisabled(!checked);
+            });
+
+            if(button_groups->size() <= index) {
+                auto group = std::make_shared<QButtonGroup>();
+                selection_button->setChecked(true);
+                group->addButton(selection_button);
+                button_groups->append(group);
+            } else {
+                button_groups->at(index)->addButton(selection_button);
+            }
+
+
+
+            preview_container->addWidget(filename_label);
+
+            groupContainer->addSpacing(30);
+
+            QFrame *v_line = new QFrame(scrollAreaWidgetContents);
+            v_line->setMinimumWidth(5);
+            v_line->setMaximumWidth(5);
+            v_line->setStyleSheet("background: #888");
+            groupContainer->addWidget(v_line);
+
+            groupContainer->addLayout(preview_container);
+
+            index++;
         }
+
         verticalLayout_inner->addLayout(groupContainer);
+
+        QFrame *h_line = new QFrame(scrollAreaWidgetContents);
+        h_line->setMinimumHeight(3);
+        h_line->setMaximumHeight(3);
+        h_line->setStyleSheet("background: #666");
+        verticalLayout_inner->addWidget(h_line);
+
+        group_index ++;
     }
 
     scrollArea->setWidget(scrollAreaWidgetContents);

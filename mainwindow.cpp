@@ -33,8 +33,8 @@ struct ScanModeProperties {
 };
 
 QList<ScanModeProperties> scan_modes = {
-    {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::hashCompare_display, nullptr},
-    {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::nameCompare_display, nullptr},
+    {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::fileCompare_display, nullptr},
+    {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::fileCompare_display, nullptr},
     {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupeMove_display, nullptr},
     {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupeRename_display, nullptr},
     {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, &MainWindow::exifRename_display, nullptr},
@@ -185,8 +185,8 @@ void MainWindow::updateLoop100Ms() {
 
     // update piechart
     series->slices().at(PiechartIndex::ALL_FILES)->setValue(unique_files.length() - processed_files);
-    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files - duplicate_files);
-    series->slices().at(PiechartIndex::DUPLICATE_FILES)->setValue(duplicate_files - preloaded_files);
+    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files - qMax(duplicate_files, preloaded_files));
+    series->slices().at(PiechartIndex::DUPLICATE_FILES)->setValue(qMax(duplicate_files - preloaded_files, 0));
     series->slices().at(PiechartIndex::PRELOADED_FILES)->setValue(preloaded_files);
 
     for (int i = 0; i < series->count(); i++){
@@ -194,14 +194,26 @@ void MainWindow::updateLoop100Ms() {
         slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
     }
 
-    if (etaMode != DISABLED) {
+    // update stats
+    ui->total_files_label->setText(QString("Total files: %1").arg(unique_files.size()));
+    ui->total_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_all)));
+
+    ui->processed_files_label->setText(QString("Processed files: %1").arg(processed_files));
+    ui->processed_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_processed)));
+
+    ui->preloaded_files_label->setText(QString("Preloaded files: %1").arg(preloaded_files));
+    ui->preloaded_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_preloaded)));
+
+    ui->duplicate_files_label->setText(QString("Duplicate files: %1").arg(duplicate_files));
+    ui->duplicate_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_dupes)));
+
+    if (etaMode == EtaMode::ENABLED) {
         ui->time_passed_label->setText(QString("Time passed: %1").arg(TimeUtils::timeSinceTimestamp(scan_start_time)));
 
-        float averagePerSec = qMax(etaMode == SPEED_BASED ? averageDiskReadSpeed : averageFilesPerSecond, 0.001f);
-        quint64 all = etaMode == SPEED_BASED ? files_size_all : unique_files.length() ;
-        quint64 processed = etaMode == SPEED_BASED ? files_size_processed : processed_files;
+        quint64 all = unique_files.length() + duplicate_files;
+        quint64 processed = processed_files + preloaded_files;
 
-        QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / averagePerSec * 1000));
+        QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / averageFilesPerSecond * 1000));
 
         ui->eta_label->setText(eta_arg);
         setWindowTitle(QString("Disk deduper (%1%, %2 left)").arg(processed / (double)all * 100).arg(eta_arg));
@@ -217,8 +229,8 @@ void MainWindow::updateLoop2s() {
     averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
     lastMeasuredDiskRead = disk_read;
 
-    averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((processed_files - previous_processed_files) / 2.0) * 0.1;
-    previous_processed_files = processed_files;
+    averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((processed_files + preloaded_files - previous_processed_files) / 2.0) * 0.1;
+    previous_processed_files = processed_files + preloaded_files;
 
     ui->disk_read_label->setText(QString("Disk read: %1/s").arg(FileUtils::bytesToReadable(averageDiskReadSpeed)));
     ui->items_per_sec_label->setText(QString("Items per sec: %1/s").arg(averageFilesPerSecond));
@@ -296,12 +308,14 @@ void MainWindow::onStartScanButtonClicked() {
     duplicate_files = 0;
     preloaded_files = 0;
     files_size_dupes = 0;
+    files_size_preloaded = 0;
     unique_files.clear();
     averageFilesPerSecond = 0;
 
     setUiDisabled(true);
 
     scan_start_time = QDateTime::currentMSecsSinceEpoch();
+    etaMode = EtaMode::ENABLED;
 
     QEventLoop loop;
     QFutureWatcher<bool> futureWatcher;
@@ -319,7 +333,7 @@ void MainWindow::onStartScanButtonClicked() {
     }
 
     setUiDisabled(false);
-    etaMode = DISABLED;
+    etaMode = EtaMode::DISABLED;
     setCurrentTask("Idle");
 }
 
@@ -576,38 +590,54 @@ void MainWindow::addEnumeratedFile(const QString& file) {
         setCurrentTask(QString("Enumerating file: %1").arg(file));
     }
     unique_files.push_back({file, fileInfo.absolutePath(), fileInfo.fileName(), fileInfo.suffix().toLower(), file_r.size()});
-};
+}
 
 void MainWindow::hashAllFiles(QSqlDatabase db) {
      for (auto& u_file: unique_files){
-         processed_files ++;
-         files_size_processed += u_file.size_bytes;
          setCurrentTask(QString("Hashing file: %1").arg(u_file));
          u_file.loadHash(db);
+         processed_files ++;
+         files_size_processed += u_file.size_bytes;
      }
 }
 
-void MainWindow::hashCompare(QSqlDatabase db) {
-    hashAllFiles(db);
+template<FileField field>
+void MainWindow::findDuplicateFiles(QSqlDatabase db) {
 
-    // map of groups of files with the same hash
+    // map of groups of files with the same key field (name, hash, etc.)
     QMap<QString, QVector<File>> duplicate_file_groups;
 
-    // we group all files with the same hash
+    // we group all files with the same key field
     for(auto& file: unique_files) {
+
+        QString value;
+        if constexpr(field == FileField::NAME){
+            value = file.name.toLower();
+        } else if constexpr(field == FileField::HASH){
+            setCurrentTask(QString("Hashing file: %1").arg(file));
+            file.loadHash(db);
+            value = file.hash;
+        }
+
+        processed_files ++;
+        files_size_processed += file.size_bytes;
+
         setCurrentTask(QString("Comparing: %1").arg(file));
-        if(duplicate_file_groups.contains(file.hash)) {
+        if(duplicate_file_groups.contains(value)) {
             duplicate_files ++;
             files_size_dupes += file.size_bytes;
         }
-        duplicate_file_groups[file.hash].append(file);
+        duplicate_file_groups[value].append(file);
     }
 
     for(auto& group: duplicate_file_groups) {
-        for(auto& file: group) {
-            setCurrentTask(QString("Generating preview for: %1").arg(file));
-            file.loadThumbnail(db);
-            preloaded_files ++;
+        if(group.size() > 1) {
+            for(auto& file: group) {
+                setCurrentTask(QString("Generating preview for: %1").arg(file));
+                file.loadThumbnail(db);
+                preloaded_files ++;
+                files_size_preloaded += file.size_bytes;
+            }
         }
     }
 
@@ -670,8 +700,12 @@ void MainWindow::hashCompare(QSqlDatabase db) {
     }
 }
 
-void MainWindow::nameCompare(QSqlDatabase) {
+void MainWindow::hashCompare(QSqlDatabase db) {
+    findDuplicateFiles<FileField::HASH>(db);
+}
 
+void MainWindow::nameCompare(QSqlDatabase db) {
+    findDuplicateFiles<FileField::NAME>(db);
 }
 
 void MainWindow::autoDedupeMove(QSqlDatabase db) {
@@ -687,8 +721,6 @@ void MainWindow::exifRename(QSqlDatabase) {
 }
 
 void MainWindow::showStats(QSqlDatabase db) {
-
-    etaMode = ITEM_BASED;
 
     QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
 
@@ -734,7 +766,7 @@ void MainWindow::showStats(QSqlDatabase db) {
     stat_results = {meta_fields_stats, unique_files.length(), files_size_all};
 }
 
-void MainWindow::hashCompare_display() {
+void MainWindow::fileCompare_display() {
     if(dedupe_resuts.empty()) {
        displayWarning("No dupes found");
        return;
@@ -743,10 +775,6 @@ void MainWindow::hashCompare_display() {
     dupe_results_dialog->setModal(true);
     hide();
     dupe_results_dialog->show();
-}
-
-void MainWindow::nameCompare_display() {
-
 }
 
 void MainWindow::autoDedupeMove_display() {
