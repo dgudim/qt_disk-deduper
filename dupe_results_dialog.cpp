@@ -1,18 +1,21 @@
 #include "dupe_results_dialog.h"
 #include <QGraphicsOpacityEffect>
 #include <QPushButton>
-#include <QRadioButton>
 #include <QScrollArea>
+
+#include "deletion_confirmation_dialog.h"
 #include "ui_dupe_results_dialog.h"
 #include "gutils.h"
 
-Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const QVector<QVector<QVector<File>>>& results, int total_files, quint64 total_size) : QDialog(parent), ui(new Ui::Dupe_results_dialog) {
+Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const QVector<QVector<QVector<File>>>& results, int total_files, quint64 total_size) :
+    QDialog(parent), ui(new Ui::Dupe_results_dialog) {
+
     ui->setupUi(this);
 
     setWindowTitle("View duplicate files");
 
     // open main window on dialogue close
-    connect(this, SIGNAL(rejected()), parent, SLOT(show()));
+    connect(this, &QDialog::rejected, parent, &QWidget::show);
 
     ui->res_label->setText(QString("Total files: %1 | Total groups: %2 | Total size: %3")
                            .arg(total_files).arg(results.size()).arg(FileUtils::bytesToReadable(total_size)));
@@ -36,6 +39,30 @@ void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<Fil
     tab_contents->setContentsMargins(0, 0, 0, 0);
 
     QPushButton* applyButton = new QPushButton("Keep selected, delete the rest", tab_container);
+
+    connect(applyButton, &QPushButton::clicked, this, [button_groups, this](){
+        QVector<File> files_to_delete;
+        for(auto& button_group: *button_groups) {
+            QList<QAbstractButton*> buttons = button_group->buttons();
+            for (auto button: buttons){
+                // get all files except selected
+                if(button != button_group->checkedButton()) {
+                    files_to_delete.append(button_to_file_map.value(button));
+                }
+            }
+        }
+        Deletion_confirmation_dialog* deleteion_confirmation_dialog = new Deletion_confirmation_dialog(this, files_to_delete);
+        connect(deleteion_confirmation_dialog, &Deletion_confirmation_dialog::accepted, this,
+        [this]() {
+            ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
+            if (!ui->tabWidget->count()){
+                // close dialog
+                reject();
+            }
+        });
+        deleteion_confirmation_dialog->exec();
+    });
+
     tab_contents->addWidget(applyButton);
 
     int items_in_group = 0;
@@ -43,6 +70,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<Fil
         items_in_group += group.size();
     }
     QLabel* stats_label = new QLabel(QString("Files in group: %1 / %2 (unique)").arg(items_in_group).arg(list[0].size()), tab_container);
+
     tab_contents->addWidget(stats_label);
 
     // create new scroll area for items
@@ -102,6 +130,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<Fil
 
 
             QRadioButton* selection_button = new QRadioButton("select", scrollAreaWidgetContents);
+            button_to_file_map.insert(selection_button, file);
             preview_container->addWidget(selection_button);
 
             connect(selection_button, &QRadioButton::toggled, this,

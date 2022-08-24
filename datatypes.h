@@ -48,7 +48,7 @@ struct Countable_qstring {
 };
 
 struct File {
-    QString full_path;
+    bool valid = true;
     QString path_without_name;
     QString name;
     qint64 size_bytes;
@@ -57,8 +57,10 @@ struct File {
     QByteArray thumbnail_raw;
     QMap<QString, QString> metadata;
 
+    File (){ valid = false; }
+
     File (const QString& full_path, const QString& path_without_name, const QString& name, const QString& extension, qint64 size_bytes)
-        : full_path(full_path), path_without_name(path_without_name), name(name), size_bytes(size_bytes), extension(extension) {
+        : path_without_name(path_without_name), name(name), size_bytes(size_bytes), extension(extension), full_path(full_path) {
         metadata.insert("extension", extension);
     }
 
@@ -77,6 +79,8 @@ struct File {
     operator QString() const { return full_path; }
 
 private:
+     QString full_path;
+
     bool metadata_loaded = false;
 
     void saveHashToDb(QSqlDatabase db);

@@ -12,6 +12,7 @@ QMAKE_CXXFLAGS_WARN_ON += -Wno-unknown-pragmas -Wunused-parameter -Wunused-funct
 
 SOURCES += \
     datatypes.cpp \
+    deletion_confirmation_dialog.cpp \
     dupe_results_dialog.cpp \
     folder_list_item.cpp \
     gutils.cpp \
@@ -25,6 +26,7 @@ SOURCES += \
 
 HEADERS += \
     datatypes.h \
+    deletion_confirmation_dialog.h \
     dupe_results_dialog.h \
     folder_list_item.h \
     gutils.h \
@@ -37,6 +39,7 @@ HEADERS += \
     TagInfo.h
 
 FORMS += \
+    deletion_confirmation_dialog.ui \
     dupe_results_dialog.ui \
     folder_list_item.ui \
     mainwindow.ui \

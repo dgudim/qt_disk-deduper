@@ -40,7 +40,11 @@ namespace FileUtils {
     };
 
     void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
-                 ExtenstionFilterState extFilterState, std::function<void(QString)> callback);
+                 ExtenstionFilterState extFilterState, std::function<void(const QString&)> callback);
+
+    bool deleteOrRenameFiles(QVector<File>& files_to_delete,
+                             std::function<void(const QString&)> status_callback,
+                             bool rename = false, const QString &target_dir = "", const QString &postfix = "");
 
     QString getFileHash(const QString& full_path);
     quint64 getDiskReadSizeB();

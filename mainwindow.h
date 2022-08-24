@@ -28,6 +28,7 @@
 
 #include <functional>
 
+#include "gutils.h"
 #include "metadata_selection_dialogue.h"
 #include "ExifTool.h"
 #include "stats_dialog.h"
@@ -63,9 +64,6 @@ public:
     void showStats(QSqlDatabase db);
 
     void fileCompare_display();
-    void autoDedupeMove_display();
-    void autoDedupeRename_display();
-    void exifRename_display();
     void showStats_display();
 
     bool showStats_request();
@@ -74,11 +72,10 @@ public:
     static MainWindow *this_window;
 
 public slots:
-    static void appendToLog(const QString &msg, bool error);
+    static void appendToLog(const QString &msg, bool log_to_ui);
 
 private slots:
     void onAddScanFolderClicked();
-    void onAddSlaveFolderClicked();
 
     void onSetMasterFolderClicked();
     void onSetDupesFolderClicked();
@@ -121,11 +118,13 @@ private:
     template<FileField field>
     void findDuplicateFiles(QSqlDatabase db);
 
-    void addEnumeratedFile(const QString& file);
+    void autoDedupe(QSqlDatabase db, bool safe);
+
+    void addEnumeratedFile(const QString& file, QVector<File>& files);
     void displayWarning(const QString &message);
 
     bool startScanAsync();
-    void hashAllFiles(QSqlDatabase db);
+    void hashAllFiles(QSqlDatabase db, QVector<File>& files);
 
     void setUiDisabled(bool state);
 
@@ -137,6 +136,7 @@ private:
     bool scan_active = false;
     EtaMode etaMode = EtaMode::DISABLED;
     int currentMode;
+    qint32 total_files = 0;
     qint32 processed_files = 0; // max 4294967295
     qint32 previous_processed_files = 0; // for measuring speed
     qint32 duplicate_files = 0;
@@ -149,12 +149,16 @@ private:
 
     QPieSeries *series;
 
+    // general variables
+    QVector<File> unique_files;
+    QVector<File> master_files;
+    QStringList directories_to_scan;
+
     QString masterFolder;
     QString dupesFolder;
 
-    // general variables
-    QVector<File> unique_files;
-    QStringList directories_to_scan;
+    QStringList listed_exts;
+    FileUtils::ExtenstionFilterState extension_filter_state;
 
     // metadata extraction
     StatsContainer stat_results;

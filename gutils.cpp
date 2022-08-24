@@ -5,7 +5,7 @@
 QMap<QString, quint64> size_multipliers = {{"b", 1}, {"Kb", 1024}, {"Mb", 1048576}, {"Gb", 1073741824}};
 
 void FileUtils::walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
-             ExtenstionFilterState extFilterState, std::function<void(QString)> callback) {
+             ExtenstionFilterState extFilterState, std::function<void(const QString&)> callback) {
 
     bool ext_filter_enabled = extFilterState != ExtenstionFilterState::DISABLED;
     bool blacklist_ext = extFilterState == ExtenstionFilterState::ENABLED_BLACK;
@@ -31,6 +31,34 @@ void FileUtils::walkDir(const QString& dir, const QStringList& blacklisted_dirs,
         }
     }
 }
+
+bool FileUtils::deleteOrRenameFiles(QVector<File> &files_to_delete,
+                                    std::function<void(const QString&)> status_callback,
+                                    bool rename, const QString& target_dir, const QString& postfix) {
+    bool success = true;
+    QString stat_msg = rename ? "renaming" : "deleting";
+
+    for(auto& file: files_to_delete) {
+        if(file.valid) {
+            QFile file_real (file);
+            QDir dir = target_dir + file.path_without_name;
+            dir.mkpath(dir.absolutePath());
+
+            QString resulting_path = dir.filePath(file.name + postfix);
+
+            status_callback(QString("Status: %1 %2 (dir %3)").arg(stat_msg, file, resulting_path));
+            if (!(rename ? file_real.rename(dir.filePath(file.name + postfix)) : file_real.remove())) {
+                status_callback(QString("Status: error %1 %2 (dir %3)").arg(stat_msg, file, resulting_path));
+                qCritical() << "Error" << stat_msg << file << "dir:" << resulting_path;
+                success = false;
+                break;
+            }
+            file.valid = false;
+        }
+    }
+    return success;
+}
+
 
 QString FileUtils::getFileHash(const QString& full_path) {
     QFile file = QFile(full_path);

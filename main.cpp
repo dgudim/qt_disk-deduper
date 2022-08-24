@@ -29,7 +29,7 @@ void captureMessageOutput(QtMsgType type, const QMessageLogContext &context, con
             abort();
     }
     // transfer to ui thread
-    MainWindow::appendToLog(msg_wrap.arg(msg), type == QtCriticalMsg);
+    MainWindow::appendToLog(msg_wrap.arg(msg), type == QtCriticalMsg || type == QtWarningMsg);
 }
 
 int main(int argc, char *argv[]) {

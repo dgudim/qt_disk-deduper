@@ -5,6 +5,7 @@
 
 #include <QDialog>
 #include <QButtonGroup>
+#include <QRadioButton>
 
 template<typename T>
 using ptr = std::shared_ptr<T>;
@@ -37,6 +38,9 @@ private:
     void loadTab(const QString& name, const QVector<QVector<File>>& list, pButtonGroups button_groups);
 
     ButtonGroupsPerTab button_groups_per_tab;
+
+    QMap<QAbstractButton*, File> button_to_file_map;
+
     Ui::Dupe_results_dialog *ui;
 };
 
