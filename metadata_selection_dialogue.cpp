@@ -14,8 +14,8 @@ Metadata_selection_dialogue::Metadata_selection_dialogue(QWidget *parent) : QDia
 
     ui->checkbox_container->addItem(new QSpacerItem(20, 40, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
-    connect(ui->cancel_button, SIGNAL(clicked()), this, SLOT(reject()));
-    connect(ui->confirm_button, SIGNAL(clicked()), this, SLOT(accept()));
+    connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
 QVector<QString> Metadata_selection_dialogue::getSelected() {

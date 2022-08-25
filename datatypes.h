@@ -10,12 +10,39 @@
 #include <QMap>
 #include <QDataStream>
 
+#include <QButtonGroup>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
 
 #include "ExifTool.h"
+
+template<typename T>
+using ptr = std::shared_ptr<T>;
+
+// stores one button group in the tab
+typedef ptr<QButtonGroup> ButtonGroup;
+
+// stores all button groups of one tab
+typedef QVector<ButtonGroup> ButtonGroups;
+
+// stores all button groups of one tab (pointer)
+typedef ptr<ButtonGroups> pButtonGroups;
+
+// stores all button groups of all tabs
+typedef QVector<pButtonGroups> ButtonGroupsPerTab;
+
+struct File;
+
+// stores files with the same hash
+typedef QVector<File> MultiFile;
+
+// stores multiFiles with thre same fingerprint
+typedef QVector<MultiFile> MultiFileGroup;
+
+// stores multiple MultiFileGroups
+typedef QVector<MultiFileGroup> MultiFileGroupArray;
 
 enum MediaType {
     UNKNOWN,

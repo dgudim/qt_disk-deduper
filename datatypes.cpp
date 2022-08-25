@@ -106,7 +106,7 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
     }
 
     char *err = ex_tool->GetError();
-    if (err) qCritical() << err;
+    if (err) qWarning() << err;
 
     saveMetadataToDb(db);
 }
@@ -125,10 +125,8 @@ void File::loadThumbnail(QSqlDatabase db) {
 
         // try to get thumbnail directly from file
         QPixmap icon_pix = QIcon(full_path).pixmap(200, 200);
-        bool save_to_db = true;
 
         if(icon_pix.isNull()) {
-            save_to_db = false;
             // try to get filetype icon from system theme
 
             QIcon icon;
@@ -147,10 +145,7 @@ void File::loadThumbnail(QSqlDatabase db) {
         QBuffer inBuffer( &thumbnail_raw );
         inBuffer.open( QIODevice::WriteOnly );
         icon_pix.save( &inBuffer, "PNG" );
-
-        if(save_to_db){
-           saveThumbnailToDb(db);
-        }
+        saveThumbnailToDb(db);
     }
 }
 

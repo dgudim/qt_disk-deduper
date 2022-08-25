@@ -29,10 +29,7 @@
 #include <functional>
 
 #include "gutils.h"
-#include "metadata_selection_dialogue.h"
 #include "ExifTool.h"
-#include "stats_dialog.h"
-#include "dupe_results_dialog.h"
 #include "folder_list_item.h"
 
 QT_BEGIN_NAMESPACE
@@ -66,7 +63,8 @@ public:
     void fileCompare_display();
     void showStats_display();
 
-    bool showStats_request();
+    QString showStats_request();
+    QString autoDedupe_request();
 
     // for displaying log messages in the ui
     static MainWindow *this_window;
@@ -140,17 +138,20 @@ private:
     qint32 processed_files = 0; // max 4294967295
     qint32 previous_processed_files = 0; // for measuring speed
     qint32 duplicate_files = 0;
+    // unique files for which we have duplicate files
+    qint32 unique_files = 0;
     qint32 preloaded_files = 0;
     float averageFilesPerSecond = 0;
     quint64 files_size_all = 0;
     quint64 files_size_dupes = 0;
+    quint64 files_size_unique = 0;
     quint64 files_size_processed = 0;
     quint64 files_size_preloaded = 0;
 
     QPieSeries *series;
 
     // general variables
-    QVector<File> unique_files;
+    QVector<File> indexed_files;
     QVector<File> master_files;
     QStringList directories_to_scan;
 
@@ -163,13 +164,10 @@ private:
     // metadata extraction
     StatsContainer stat_results;
     QVector<QString> selectedMetaFields;
-    Stats_dialog *stats_dialog;
-    Metadata_selection_dialogue *selection_dialogue;
     ExifTool *ex_tool;
 
     // dedupe results
-    QVector<QVector<QVector<File>>> dedupe_resuts;
-    Dupe_results_dialog *dupe_results_dialog;
+    MultiFileGroupArray dedupe_resuts;
 
     // utility functions
     template<typename T>

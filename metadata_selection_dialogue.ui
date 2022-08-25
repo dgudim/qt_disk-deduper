@@ -58,16 +58,12 @@
       <enum>QLayout::SetDefaultConstraint</enum>
      </property>
      <item>
-      <widget class="QPushButton" name="cancel_button">
-       <property name="text">
-        <string>Cancel</string>
+      <widget class="QDialogButtonBox" name="buttonBox">
+       <property name="standardButtons">
+        <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
        </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="confirm_button">
-       <property name="text">
-        <string>Ok</string>
+       <property name="centerButtons">
+        <bool>false</bool>
        </property>
       </widget>
      </item>

@@ -1,18 +1,22 @@
 #include "mainwindow.h"
-#include "gutils.h"
 #include "ui_mainwindow.h"
+
+#include "dupe_results_dialog.h"
+#include "metadata_selection_dialogue.h"
 
 enum PiechartIndex {
     ALL_FILES = 0,
     SCANNED_FILES = 1,
     DUPLICATE_FILES = 2,
-    PRELOADED_FILES = 3
+    UNIQUE_FILES = 3,
+    PRELOADED_FILES = 4
 };
 
 QVector<QPair<QString, QColor>> piechart_config = {
     {"A: %1", QColor(1, 184, 170)},
     {"Sc: %1", QColor(3, 171, 51)},
     {"Dup: %1", QColor(181, 113, 4)},
+    {"U: %1", QColor(138, 84, 255)},
     {"Pr: %1", QColor(191, 140, 0)}};
 
 enum ScanMode {
@@ -29,14 +33,14 @@ struct ScanModeProperties {
     QString description;
     std::function<void(MainWindow*, QSqlDatabase)> process_function;
     std::function<void(MainWindow*)> display_function;
-    std::function<bool(MainWindow*)> request_function;
+    std::function<QString(MainWindow*)> request_function;
 };
 
 QList<ScanModeProperties> scan_modes = {
     {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::fileCompare_display, nullptr},
     {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::fileCompare_display, nullptr},
-    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, nullptr, nullptr},
-    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, nullptr, nullptr},
+    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupe_request, nullptr},
+    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupe_request, nullptr},
     {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, nullptr, nullptr},
     {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
 
@@ -182,9 +186,14 @@ void MainWindow::updateLoop100Ms() {
 
     // update piechart
     series->slices().at(PiechartIndex::ALL_FILES)->setValue(total_files - processed_files);
-    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files - qMax(duplicate_files, preloaded_files));
+    // substract duplicate_files and unique_files
+    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files - duplicate_files - unique_files);
+    // avoid negative values as preloaded_files also preloads unique_files
     series->slices().at(PiechartIndex::DUPLICATE_FILES)->setValue(qMax(duplicate_files - preloaded_files, 0));
     series->slices().at(PiechartIndex::PRELOADED_FILES)->setValue(preloaded_files);
+    // when preloaded_files finishes 'eating' duplicate_files the value of duplicate_files - preloaded_files
+    // becomes negative and preloaded_files starts 'eating' unique_files
+    series->slices().at(PiechartIndex::UNIQUE_FILES)->setValue(unique_files + qMin(duplicate_files - preloaded_files, 0));
 
     for (int i = 0; i < series->count(); i++){
         auto slice = series->slices().at(i);
@@ -204,10 +213,16 @@ void MainWindow::updateLoop100Ms() {
     ui->duplicate_files_label->setText(QString("Duplicate files: %1").arg(duplicate_files));
     ui->duplicate_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_dupes)));
 
+    ui->unique_files_label->setText(QString("Unique files: %1").arg(unique_files));
+    ui->unique_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_unique)));
+
     if (etaMode == EtaMode::ENABLED) {
         ui->time_passed_label->setText(QString("Time passed: %1").arg(TimeUtils::timeSinceTimestamp(scan_start_time)));
 
-        quint64 all = total_files + duplicate_files;
+        // values that represent total number of files
+        quint64 all = total_files + duplicate_files + unique_files;
+        // values that represent portion of the total number of files
+        // (preloaded_files is portion of duplicate_files + unique_files and processed_files is total_files)
         quint64 processed = processed_files + preloaded_files;
 
         QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / averageFilesPerSecond * 1000));
@@ -246,13 +261,19 @@ void MainWindow::onAddScanFolderClicked() {
 }
 
 void MainWindow::onSetMasterFolderClicked() {
-    masterFolder = callDirSelectionDialogue("Choose master folder");
-    ui->master_folder_label->setText(QString("Master folder: %1").arg(masterFolder));
+    QString temp = callDirSelectionDialogue("Choose master folder");
+    if(!temp.isEmpty()) {
+        masterFolder = temp;
+        ui->master_folder_label->setText(QString("Master folder: %1").arg(masterFolder));
+    }
 }
 
 void MainWindow::onSetDupesFolderClicked() {
-    dupesFolder = callDirSelectionDialogue("Choose master folder");
-    ui->dupes_folder_label->setText(QString("Dupes folder: %1").arg(dupesFolder));
+    QString temp = callDirSelectionDialogue("Choose dupes folder");
+    if(!temp.isEmpty()) {
+        dupesFolder = temp;
+        ui->dupes_folder_label->setText(QString("Dupes folder: %1").arg(dupesFolder));
+    }
 }
 
 void MainWindow::onExtentionCheckboxStateChanged(int state) {
@@ -288,9 +309,12 @@ void MainWindow::onStartScanButtonClicked() {
         return;
     }
 
-    if(scan_modes.at(currentMode).request_function && !scan_modes.at(currentMode).request_function(this)) {
-        displayWarning("Nothing to do");
-        return;
+    if(scan_modes.at(currentMode).request_function) {
+        QString message = scan_modes.at(currentMode).request_function(this);
+        if(!message.isEmpty()) {
+            displayWarning(message);
+            return;
+        }
     }
 
     // reset variables
@@ -300,10 +324,12 @@ void MainWindow::onStartScanButtonClicked() {
     processed_files = 0;
     previous_processed_files = 0;
     duplicate_files = 0;
+    unique_files = 0;
+    files_size_unique = 0;
     preloaded_files = 0;
     files_size_dupes = 0;
     files_size_preloaded = 0;
-    unique_files.clear();
+    indexed_files.clear();
     master_files.clear();
     averageFilesPerSecond = 0;
 
@@ -324,13 +350,13 @@ void MainWindow::onStartScanButtonClicked() {
         displayWarning("Nothing to scan, your filters filter all the files");
     } else {
         // display results in main thread
+        etaMode = EtaMode::DISABLED;
         if(scan_modes.at(currentMode).display_function) {
             scan_modes.at(currentMode).display_function(this);
         }
     }
 
     setUiDisabled(false);
-    etaMode = EtaMode::DISABLED;
     setCurrentTask("Idle");
 }
 
@@ -549,21 +575,21 @@ bool MainWindow::startScanAsync() {
         if(itemWidget->isWhitelisted()) {
             walkDir(itemWidget->getText(), blacklisted_dirs, listed_exts,
                     extension_filter_state,
-                    [this](QString file) {addEnumeratedFile(file, unique_files);});
+                    [this](QString file) {addEnumeratedFile(file, indexed_files);});
         }
     }
 
     // remove duplicates
-    removeDuplicates(unique_files);
+    removeDuplicates(indexed_files);
 
-    if(unique_files.empty()) {
+    if(indexed_files.empty()) {
         return false;
     }
 
     // recalculate after removing duplicates
     files_size_all = 0;
-    total_files = unique_files.size();
-    for(auto& file: unique_files) {
+    total_files = indexed_files.size();
+    for(auto& file: indexed_files) {
         files_size_all += file.size_bytes;
     }
 
@@ -588,7 +614,7 @@ void MainWindow::addEnumeratedFile(const QString& file, QVector<File>& files) {
     }
     total_files ++;
     files_size_all += file_r.size();
-    files.push_back({file, fileInfo.absolutePath(), fileInfo.fileName(), fileInfo.suffix().toLower(), file_r.size()});
+    files.push_back({file, fileInfo.absolutePath(), fileInfo.fileName(), fileInfo.completeSuffix().toLower(), file_r.size()});
 }
 
 void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files) {
@@ -603,11 +629,11 @@ void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files) {
 template<FileField field>
 void MainWindow::findDuplicateFiles(QSqlDatabase db) {
 
-    // map of groups of files with the same key field (name, hash, etc.)
-    QMap<QString, QVector<File>> duplicate_file_groups;
+    // map of groups of files with the same key field (name or hash)
+    QMap<QString, MultiFile> duplicate_files_map;
 
     // we group all files with the same key field
-    for(auto& file: unique_files) {
+    for(auto& file: indexed_files) {
 
         QString value;
         if constexpr(field == FileField::NAME){
@@ -622,14 +648,19 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
         files_size_processed += file.size_bytes;
 
         setCurrentTask(QString("Comparing: %1").arg(file));
-        if(duplicate_file_groups.contains(value)) {
+        if(duplicate_files_map.contains(value)) {
+            // we have our first hit, this means that the first file is unique
+            if(duplicate_files_map[value].size() == 1) {
+                unique_files ++;
+                files_size_unique += file.size_bytes;
+            }
             duplicate_files ++;
             files_size_dupes += file.size_bytes;
         }
-        duplicate_file_groups[value].append(file);
+        duplicate_files_map[value].append(file);
     }
 
-    for(auto& group: duplicate_file_groups) {
+    for(auto& group: duplicate_files_map) {
         if(group.size() > 1) {
             for(auto& file: group) {
                 setCurrentTask(QString("Generating preview for: %1").arg(file));
@@ -640,21 +671,21 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
         }
     }
 
-    // map of fingerprint-to-groups, fingerprint will be the same in two groups if files in 2 groups group have the same dupe locations
+    // map of fingerprint-to-multiFile, fingerprint will be the same in two groups if files in 2 groups group have the same dupe locations
 
     // example
     // group1: /testdir/image1.png, /testdir2/image.png, /testdir3/image3.png
     // group2: /testdir3/image1.png, /testdir/image.png, /testdir2/image3.png
     // fingerprint will be the same
 
-    QMap<QString, QVector<QVector<File>>> duplicate_file_groups_fingerprintMatched;
+    QMap<QString, MultiFileGroup> multiFiles_fingerprintMatched;
 
-    const QList<QVector<File>> unique_groups = duplicate_file_groups.values();
+    const QList<MultiFile> uniqueMultiFiles = duplicate_files_map.values();
 
     // we group all groups bigger than 1 (at least one duplicate) with the same fingerprint
-    for(const auto& group: unique_groups) {
-        if(group.size() > 1) {
-            duplicate_file_groups_fingerprintMatched[FileUtils::getFileGroupFingerprint(group)].append(group);
+    for(const auto& multiFile: uniqueMultiFiles) {
+        if(multiFile.size() > 1) {
+            multiFiles_fingerprintMatched[FileUtils::getFileGroupFingerprint(multiFile)].append(multiFile);
         }
     }
 
@@ -678,12 +709,12 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
     //)
     //)
 
-    const QList<QVector<QVector<File>>> dedupe_resuts_intermediate = duplicate_file_groups_fingerprintMatched.values();
+    const QList<MultiFileGroup> dedupe_resuts_intermediate = multiFiles_fingerprintMatched.values();
 
     dedupe_resuts.clear();
     for(const auto& group_of_groups: dedupe_resuts_intermediate) {
 
-        QVector<QVector<File>> rotated_vector;
+        MultiFileGroup rotated_vector;
 
         for(const auto& group: group_of_groups) {
             for(int i = 0; i < group.size(); i++) {
@@ -723,13 +754,14 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
     hashAllFiles(db, master_files);
 
     QMap<QString, File> master_hashes;
+    QSet<QString> master_hashes_hit;
     QVector<File> dupes;
 
     for(auto& master_file: master_files) {
         master_hashes[master_file.hash] = master_file;
     }
 
-    for(auto& file: unique_files) {
+    for(auto& file: indexed_files) {
 
         setCurrentTask(QString("Hashing file: %1").arg(file));
         file.loadHash(db);
@@ -742,6 +774,12 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
             duplicate_files ++;
             files_size_dupes += file.size_bytes;
             dupes.append(file);
+            if (!master_hashes_hit.contains(file.hash)){
+                // our first hit, increment the number on unique files
+                unique_files ++;
+                files_size_unique ++;
+                master_hashes_hit.insert(file.hash);
+            }
         }
     }
 
@@ -766,7 +804,7 @@ void MainWindow::showStats(QSqlDatabase db) {
         meta_fields_stats.append({metadata_key, {}});
     }
 
-    for(auto& file: unique_files) {
+    for(auto& file: indexed_files) {
 
         setCurrentTask(QString("Gathering information about: %1").arg(file));
 
@@ -807,25 +845,42 @@ void MainWindow::fileCompare_display() {
        displayWarning("No dupes found");
        return;
     }
-    dupe_results_dialog = new Dupe_results_dialog(this, dedupe_resuts, duplicate_files, files_size_dupes);
-    dupe_results_dialog->setModal(true);
-    hide();
-    dupe_results_dialog->show();
+    Dupe_results_dialog dupe_results_dialog(this, dedupe_resuts, duplicate_files, files_size_dupes);
+    dupe_results_dialog.setModal(true);
+    qInfo() << dupe_results_dialog.exec();
 }
 
-bool MainWindow::showStats_request() {
-    selection_dialogue = new Metadata_selection_dialogue(this);
-    selection_dialogue->setModal(true);
-    int code = selection_dialogue->exec();
-    selectedMetaFields = selection_dialogue->getSelected();
-    return !selectedMetaFields.empty() && code == QDialog::Accepted;
+QString MainWindow::showStats_request() {
+    Metadata_selection_dialogue selection_dialogue(this);
+    selection_dialogue.setModal(true);
+    int code = selection_dialogue.exec();
+    selectedMetaFields = selection_dialogue.getSelected();
+    if(!selectedMetaFields.empty() && code == QDialog::Accepted) {
+        return "";
+    }
+    return "Nothing selected";
+}
+
+QString MainWindow::autoDedupe_request() {
+    if(masterFolder.isEmpty()) {
+        return "No master folder specified, can't proceed";
+    }
+    if(dupesFolder.isEmpty()) {
+        return "No duplicate folder specified, can't proceed";
+    }
+    if(!QDir(masterFolder).exists()) {
+        return "Master folder doesn't exist, can't proceed";
+    }
+    if(!QDir(dupesFolder).exists()) {
+        return "Duplicate folder doesn't exist, can't proceed";
+    }
+    return "";
 }
 
 void MainWindow::showStats_display() {
-    stats_dialog = new Stats_dialog(this, stat_results);
-    stats_dialog->setModal(true);
-    hide();
-    stats_dialog->show();
+    Stats_dialog stats_dialog(this, stat_results);
+    stats_dialog.setModal(true);
+    stats_dialog.exec();
 }
 
 #pragma endregion}

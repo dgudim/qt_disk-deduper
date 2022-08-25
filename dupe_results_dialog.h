@@ -7,21 +7,6 @@
 #include <QButtonGroup>
 #include <QRadioButton>
 
-template<typename T>
-using ptr = std::shared_ptr<T>;
-
-// stores one button group in the tab
-typedef ptr<QButtonGroup> ButtonGroup;
-
-// stores all button groups of one tab
-typedef QVector<ButtonGroup> ButtonGroups;
-
-// stores all button groups of one tab (pointer)
-typedef ptr<ButtonGroups> pButtonGroups;
-
-// stores all button groups of all tabs
-typedef QVector<pButtonGroups> ButtonGroupsPerTab;
-
 namespace Ui {
     class Dupe_results_dialog;
 }
@@ -30,16 +15,21 @@ class Dupe_results_dialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit Dupe_results_dialog(QWidget *parent, const QVector<QVector<QVector<File>>>& results, int total_files, quint64 total_size);
+    explicit Dupe_results_dialog(QWidget *parent, const MultiFileGroupArray& results, int total_files, quint64 total_size);
     ~Dupe_results_dialog();
 
 private:
 
-    void loadTab(const QString& name, const QVector<QVector<File>>& list, pButtonGroups button_groups);
+    void loadTab(const QString& name, const MultiFileGroup& list, pButtonGroups button_groups);
+
+    void load10Tabs();
 
     ButtonGroupsPerTab button_groups_per_tab;
 
     QMap<QAbstractButton*, File> button_to_file_map;
+
+    MultiFileGroupArray allGroups;
+    int current_group_index = 0;
 
     Ui::Dupe_results_dialog *ui;
 };

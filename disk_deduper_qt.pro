@@ -11,6 +11,7 @@ QMAKE_CXXFLAGS_WARN_ON += -Wno-unknown-pragmas -Wunused-parameter -Wunused-funct
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    clickableQLabel.cpp \
     datatypes.cpp \
     deletion_confirmation_dialog.cpp \
     dupe_results_dialog.cpp \
@@ -25,6 +26,7 @@ SOURCES += \
     TagInfo.cpp
 
 HEADERS += \
+    clickableQLabel.h \
     datatypes.h \
     deletion_confirmation_dialog.h \
     dupe_results_dialog.h \

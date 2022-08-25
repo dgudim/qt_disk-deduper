@@ -1,36 +1,49 @@
 #include "dupe_results_dialog.h"
-#include <QGraphicsOpacityEffect>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QPushButton>
 #include <QScrollArea>
 
+#include "clickableQLabel.h"
 #include "deletion_confirmation_dialog.h"
 #include "ui_dupe_results_dialog.h"
 #include "gutils.h"
 
-Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const QVector<QVector<QVector<File>>>& results, int total_files, quint64 total_size) :
+Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const MultiFileGroupArray& results, int total_files, quint64 total_size) :
     QDialog(parent), ui(new Ui::Dupe_results_dialog) {
 
     ui->setupUi(this);
 
     setWindowTitle("View duplicate files");
 
-    // open main window on dialogue close
-    connect(this, &QDialog::rejected, parent, &QWidget::show);
-
     ui->res_label->setText(QString("Total files: %1 | Total groups: %2 | Total size: %3")
                            .arg(total_files).arg(results.size()).arg(FileUtils::bytesToReadable(total_size)));
 
-    int index = 0;
-    for(const auto& groups: results) {
-       pButtonGroups button_groups;
-       button_groups.reset(new ButtonGroups());
-       button_groups_per_tab.append(button_groups);
-       index++;
-       loadTab(QString("Group %1").arg(index), groups, button_groups);
+    allGroups = results;
+
+    load10Tabs();
+    connect(ui->load_more_groups, &QPushButton::clicked, this, &Dupe_results_dialog::load10Tabs);
+}
+
+void Dupe_results_dialog::load10Tabs() {
+    for(int i = 0; i < 10; i++) {
+        pButtonGroups button_groups;
+        const auto& group = allGroups.value(current_group_index);
+        button_groups.reset(new ButtonGroups());
+        button_groups_per_tab.append(button_groups);
+        current_group_index++;
+        loadTab(QString("Group %1").arg(current_group_index), group, button_groups);
+
+        // all tabs were loaded
+        if(current_group_index >= allGroups.length()) {
+            ui->load_more_groups->setDisabled(true);
+            ui->load_more_groups->setHidden(true);
+            break;
+        }
     }
 }
 
-void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<File>>& list, pButtonGroups button_groups) {
+void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& list, pButtonGroups button_groups) {
 
     //create new tab
     QWidget* tab_container = new QWidget();
@@ -57,7 +70,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<Fil
             ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
             if (!ui->tabWidget->count()){
                 // close dialog
-                reject();
+                accept();
             }
         });
         deleteion_confirmation_dialog->exec();
@@ -112,13 +125,16 @@ void Dupe_results_dialog::loadTab(const QString& name, const QVector<QVector<Fil
             QVBoxLayout* preview_container = new QVBoxLayout();
 
             // construct 2 labels (preview and filename)
-            QLabel *preview_label = new QLabel(scrollAreaWidgetContents);
+            ClickableQLabel *preview_label = new ClickableQLabel(scrollAreaWidgetContents);
+            connect(preview_label, &ClickableQLabel::clicked, preview_label,
+            [file](){
+                QDesktopServices::openUrl(QUrl(QString("file://%1").arg(file)));
+            });
             preview_label->setDisabled(true);
 
-            QLabel* filename_label = new QLabel(file.name, scrollAreaWidgetContents);
-            filename_label->setDisabled(true);
-            filename_label->setMaximumWidth(preview_label->width());
+            QLabel* filename_label = new ClickableQLabel(file.name, scrollAreaWidgetContents);
             filename_label->setWordWrap(true);
+            filename_label->setDisabled(true);
             filename_label->setAlignment(Qt::AlignTop);
 
             // load thumbnail

@@ -16,14 +16,16 @@ void FileUtils::walkDir(const QString& dir, const QStringList& blacklisted_dirs,
     QFileInfoList list = directory.entryInfoList();
     for(const auto& file_or_folder: list) {
         if(file_or_folder.isFile()) {
-            bool add = !ext_filter_enabled;
-            for(const auto& extension: extensions) {
-                if(file_or_folder.completeSuffix().toLower().endsWith(extension) != blacklist_ext) {
-                    add = true;
-                    break;
+            bool ends_with_ext = !ext_filter_enabled;
+            if(ext_filter_enabled) {
+                for(const auto& extension: extensions) {
+                    if(file_or_folder.fileName().toLower().endsWith("." + extension)) {
+                        ends_with_ext = true;
+                        break;
+                    }
                 }
             }
-            if(add) {
+            if(ends_with_ext != blacklist_ext || !ext_filter_enabled) {
                 callback(file_or_folder.absoluteFilePath());
             }
         } else if (file_or_folder.isDir() && !blacklisted_dirs.contains(file_or_folder.absoluteFilePath())){

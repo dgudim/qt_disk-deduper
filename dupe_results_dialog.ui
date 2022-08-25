@@ -18,16 +18,16 @@
     <number>3</number>
    </property>
    <property name="leftMargin">
-    <number>3</number>
+    <number>0</number>
    </property>
    <property name="topMargin">
-    <number>3</number>
+    <number>0</number>
    </property>
    <property name="rightMargin">
-    <number>3</number>
+    <number>0</number>
    </property>
    <property name="bottomMargin">
-    <number>3</number>
+    <number>0</number>
    </property>
    <item>
     <widget class="QLabel" name="res_label">
@@ -43,6 +43,13 @@
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
       <number>-1</number>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="load_more_groups">
+     <property name="text">
+      <string>Load more groups</string>
      </property>
     </widget>
    </item>

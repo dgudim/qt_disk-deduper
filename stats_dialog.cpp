@@ -27,8 +27,6 @@ Stats_dialog::Stats_dialog(QWidget *parent, const StatsContainer& stats) : QDial
     setWindowTitle("View statistics");
 
     // open main window on dialogue close
-    connect(this, SIGNAL(accepted()), parent, SLOT(show()));
-    connect(this, SIGNAL(rejected()), parent, SLOT(show()));
     connect(ui->discard_button, SIGNAL(clicked()), this, SLOT(reject()));
     connect(ui->save_button, SIGNAL(clicked()), this, SLOT(accept()));
 
