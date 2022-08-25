@@ -21,25 +21,26 @@ Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const MultiFileGroupAr
 
     allGroups = results;
 
-    load10Tabs();
-    connect(ui->load_more_groups, &QPushButton::clicked, this, &Dupe_results_dialog::load10Tabs);
+    loadNTabs();
+    connect(ui->load_more_groups, &QPushButton::clicked, this, &Dupe_results_dialog::loadNTabs);
 }
 
-void Dupe_results_dialog::load10Tabs() {
-    for(int i = 0; i < 10; i++) {
+void Dupe_results_dialog::loadNTabs(int n) {
+    // QPushButton::clicked returns boolean (false) which is 0 so we set n to default value (10)
+    n = n ? n : 10;
+    for(int i = 0; i < n && current_group_index < allGroups.length(); i++) {
         pButtonGroups button_groups;
         const auto& group = allGroups.value(current_group_index);
         button_groups.reset(new ButtonGroups());
         button_groups_per_tab.append(button_groups);
         current_group_index++;
         loadTab(QString("Group %1").arg(current_group_index), group, button_groups);
+    }
 
-        // all tabs were loaded
-        if(current_group_index >= allGroups.length()) {
-            ui->load_more_groups->setDisabled(true);
-            ui->load_more_groups->setHidden(true);
-            break;
-        }
+    // all tabs were loaded
+    if(current_group_index >= allGroups.length()) {
+        ui->load_more_groups->setDisabled(true);
+        ui->load_more_groups->setHidden(true);
     }
 }
 
@@ -72,6 +73,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
                 // close dialog
                 accept();
             }
+            loadNTabs(1);
         });
         deleteion_confirmation_dialog->exec();
     });
@@ -114,6 +116,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
 
         QLabel* path_label = new QLabel(group[0].path_without_name, scrollAreaWidgetContents);
         path_label->setMaximumWidth(150);
+        path_label->setMinimumWidth(150);
         path_label->setWordWrap(true);
         infoAndButtonContainer->addWidget(path_label);
         infoAndButtonContainer->addWidget(selectWholeGroupButton);
@@ -142,7 +145,6 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
             thumbnail.loadFromData(file.thumbnail_raw);
             preview_label->setPixmap(thumbnail);
             preview_container->addWidget(preview_label);
-
 
 
             QRadioButton* selection_button = new QRadioButton("select", scrollAreaWidgetContents);

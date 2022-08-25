@@ -847,7 +847,7 @@ void MainWindow::fileCompare_display() {
     }
     Dupe_results_dialog dupe_results_dialog(this, dedupe_resuts, duplicate_files, files_size_dupes);
     dupe_results_dialog.setModal(true);
-    qInfo() << dupe_results_dialog.exec();
+    dupe_results_dialog.exec();
 }
 
 QString MainWindow::showStats_request() {

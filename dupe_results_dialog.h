@@ -22,7 +22,7 @@ private:
 
     void loadTab(const QString& name, const MultiFileGroup& list, pButtonGroups button_groups);
 
-    void load10Tabs();
+    void loadNTabs(int n = 10);
 
     ButtonGroupsPerTab button_groups_per_tab;
 
