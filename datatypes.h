@@ -4,8 +4,12 @@
 #include <QString>
 #include <QVector>
 #include <QObject>
+#include <QDebug>
 
 #include <QPixmap>
+
+#include <QDir>
+#include <QFile>
 
 #include <QMap>
 #include <QDataStream>
@@ -44,11 +48,23 @@ typedef QVector<MultiFile> MultiFileGroup;
 // stores multiple MultiFileGroups
 typedef QVector<MultiFileGroup> MultiFileGroupArray;
 
-enum MediaType {
+enum class MediaType {
     UNKNOWN,
     IMAGE,
     VIDEO,
     AUDIO
+};
+
+enum class OnFailAction {
+    DO_NOTHING = 0,
+    SKIP_FILE = 1,
+    STOP_PROCESS = 2
+};
+
+enum class OnFileExistsAction {
+    APPEND_INDEX = 0,
+    SKIP_FILE = 1,
+    STOP_PROCESS = 2
 };
 
 struct Countable_qstring {
@@ -58,9 +74,7 @@ struct Countable_qstring {
     qint64 total_size_bytes;
     double size_percentage;
 
-    Countable_qstring(const QString& string) {
-        this->string = string;
-    }
+    Countable_qstring(const QString& string) : string(string) {}
 
     Countable_qstring (const QString& string, quint32 count, qint64 total_size_bytes, double count_percentage = 0, double size_percentage = 0)
         : string(string), count(count), count_percentage(count_percentage), total_size_bytes(total_size_bytes), size_percentage(size_percentage) {};
@@ -74,6 +88,8 @@ struct Countable_qstring {
     }
 };
 
+QList<QString> getMetaFieldsList();
+
 struct File {
     bool valid = true;
     QString path_without_name;
@@ -86,10 +102,14 @@ struct File {
 
     File (){ valid = false; }
 
-    File (const QString& full_path, const QString& path_without_name, const QString& name, const QString& extension, qint64 size_bytes)
-        : path_without_name(path_without_name), name(name), size_bytes(size_bytes), extension(extension), full_path(full_path) {
-        metadata.insert("extension", extension);
+    File (const QString& full_path) : full_path(full_path) {
+        updateMetadata(full_path);
     }
+
+    void updateMetadata(const QFile& qfile);
+
+    bool rename(const QString& new_name);
+    bool renameWithoutExtension(const QString& new_name);
 
     void loadMetadata(ExifTool *ex_tool, QSqlDatabase db);
     void loadHash(QSqlDatabase db);
@@ -106,7 +126,7 @@ struct File {
     operator QString() const { return full_path; }
 
 private:
-     QString full_path;
+    QString full_path;
 
     bool metadata_loaded = false;
 
@@ -119,7 +139,25 @@ private:
     bool loadThumbnailFromDb(QSqlDatabase db);
 };
 
-QList<QString> getMetaFieldsList();
+// exif rename format container
+struct ExifFormat {
+
+    QString format_string;
+    QVector<QString> metaFieldKeys;
+    OnFailAction onFailAction;
+    OnFileExistsAction onFileExistsAction;
+    bool valid = true;
+
+    ExifFormat (){}
+
+    ExifFormat(const QString& format_string_raw, OnFailAction onFailAction, OnFileExistsAction onFileExistsAction);
+
+    bool isValid() {
+        return valid;
+    }
+
+    bool rename(File &file);
+};
 
 struct StatsContainer {
 
@@ -128,7 +166,7 @@ struct StatsContainer {
 
     QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
 
-    StatsContainer(){};
+    StatsContainer() {};
 
     StatsContainer (const QVector<QPair<QString, QVector<Countable_qstring>>>& meta_fields_stats, int total_files, quint64 total_size)
         : total_files(total_files), total_size(total_size), meta_fields_stats(meta_fields_stats) {}

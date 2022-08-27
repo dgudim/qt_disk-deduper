@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Metadata_selection_dialogue</class>
- <widget class="QDialog" name="Metadata_selection_dialogue">
+ <class>Metadata_selection_dialog</class>
+ <widget class="QDialog" name="Metadata_selection_dialog">
   <property name="geometry">
    <rect>
     <x>0</x>

@@ -65,6 +65,7 @@ public:
 
     QString showStats_request();
     QString autoDedupe_request();
+    QString exifRename_request();
 
     // for displaying log messages in the ui
     static MainWindow *this_window;
@@ -122,7 +123,8 @@ private:
     void displayWarning(const QString &message);
 
     bool startScanAsync();
-    void hashAllFiles(QSqlDatabase db, QVector<File>& files);
+    void hashAllFiles(QSqlDatabase db, QVector<File>& files, const std::function<void (File &)> &callback = [](File&){});
+    void loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool(File&)>& callback = [](File&){return true;});
 
     void setUiDisabled(bool state);
 
@@ -150,6 +152,11 @@ private:
 
     QPieSeries *series;
 
+    // logging
+    QFile currentLogFile;
+    static QTextStream currentLogFileStream;
+    void startNewLog();
+
     // general variables
     QVector<File> indexed_files;
     QVector<File> master_files;
@@ -168,6 +175,9 @@ private:
 
     // dedupe results
     MultiFileGroupArray dedupe_resuts;
+
+    // exif rename format container
+    ExifFormat exifRenameFormat;
 
     // utility functions
     template<typename T>

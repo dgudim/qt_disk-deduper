@@ -1,8 +1,10 @@
 #include "mainwindow.h"
+
 #include "ui_mainwindow.h"
 
 #include "dupe_results_dialog.h"
-#include "metadata_selection_dialogue.h"
+#include "exif_rename_builder_dialog.h"
+#include "metadata_selection_dialog.h"
 
 enum PiechartIndex {
     ALL_FILES = 0,
@@ -41,12 +43,13 @@ QList<ScanModeProperties> scan_modes = {
     {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::fileCompare_display, nullptr},
     {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupe_request, nullptr},
     {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupe_request, nullptr},
-    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, nullptr, nullptr},
+    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, nullptr, &MainWindow::exifRename_request},
     {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
 
 #define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this_window, func, Qt::QueuedConnection, __VA_ARGS__);
 
 MainWindow *MainWindow::this_window = 0;
+QTextStream MainWindow::currentLogFileStream;
 
 QSettings settings(QSettings::UserScope, "disk_deduper_qt", "ui_state");
 
@@ -88,6 +91,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     // setup initial values
     program_start_time = QDateTime::currentMSecsSinceEpoch();
     lastMeasuredDiskRead = FileUtils::getDiskReadSizeB();
+    currentLogFileStream.setDevice(&currentLogFile);
+    QDir().mkdir("./logs");
 
     setCurrentTask("Idle");
 
@@ -318,6 +323,7 @@ void MainWindow::onStartScanButtonClicked() {
     }
 
     // reset variables
+    ui->log_text->setText("");
     total_files = 0;
     files_size_all = 0;
     files_size_processed = 0;
@@ -332,6 +338,7 @@ void MainWindow::onStartScanButtonClicked() {
     indexed_files.clear();
     master_files.clear();
     averageFilesPerSecond = 0;
+    startNewLog();
 
     setUiDisabled(true);
 
@@ -520,6 +527,7 @@ void MainWindow::appendToLog(const QString &msg, bool log_to_ui) {
             this_window->ui->log_text->insertHtml(msg);
             this_window->ui->log_text->insertHtml("<br>");
         }
+        currentLogFileStream << msg << "<br>" << Qt::endl;
     } else {
         MOVE_TO_UI_THREAD("appendToLog", Q_ARG(QString, msg), Q_ARG(bool, log_to_ui));
     }
@@ -541,7 +549,16 @@ void MainWindow::setUiDisabled(bool disabled) {
     ui->start_scan_button->setDisabled(disabled);
     ui->extention_filter_enabled_checkbox->setDisabled(disabled);
     ui->add_extention_button->setDisabled(ui->extention_filter_enabled_checkbox->checkState() == Qt::CheckState::Unchecked ? true : disabled);
-};
+}
+
+void MainWindow::startNewLog() {
+    QDateTime date = QDateTime::currentDateTime();
+    QString formattedTime = date.toString("dd.MM.yyyy hh:mm:ss");
+    currentLogFile.close();
+    currentLogFile.setFileName(QString("./logs/log_%1.html").arg(formattedTime));
+    currentLogFile.open(QIODevice::WriteOnly);
+    currentLogFileStream << "<style> body { background: #282828; color: white } </style>";
+}
 
 #pragma endregion}
 
@@ -608,22 +625,34 @@ bool MainWindow::startScanAsync() {
 
 void MainWindow::addEnumeratedFile(const QString& file, QVector<File>& files) {
     QFile file_r = file;
-    QFileInfo fileInfo(file);
     if(files.size() % 100 == 0) {
         setCurrentTask(QString("Enumerating file: %1").arg(file));
     }
     total_files ++;
     files_size_all += file_r.size();
-    files.push_back({file, fileInfo.absolutePath(), fileInfo.fileName(), fileInfo.completeSuffix().toLower(), file_r.size()});
+    files.push_back({file});
 }
 
-void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files) {
+void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, const std::function<void(File&)>& callback) {
      for (auto& file: files){
          setCurrentTask(QString("Hashing file: %1").arg(file));
          file.loadHash(db);
+         callback(file);
          processed_files ++;
          files_size_processed += file.size_bytes;
      }
+}
+
+void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool (File &)> &callback){
+    for (auto& file: files){
+        setCurrentTask(QString("Getting info about file: %1").arg(file));
+        file.loadMetadata(ex_tool, db);
+        if(!callback(file)) {
+            break;
+        }
+        processed_files ++;
+        files_size_processed += file.size_bytes;
+    }
 }
 
 template<FileField field>
@@ -761,15 +790,9 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
         master_hashes[master_file.hash] = master_file;
     }
 
-    for(auto& file: indexed_files) {
-
-        setCurrentTask(QString("Hashing file: %1").arg(file));
-        file.loadHash(db);
-
-        processed_files ++;
-        files_size_processed += file.size_bytes;
-
-        setCurrentTask(QString("Comparing: %1").arg(file));
+    hashAllFiles(db, indexed_files,
+    [this, &master_hashes, &dupes, &master_hashes_hit](const File& file) {
+        setCurrentTask(QString("Comparing file: %1").arg(file));
         if(master_hashes.contains(file.hash)) {
             duplicate_files ++;
             files_size_dupes += file.size_bytes;
@@ -781,7 +804,7 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
                 master_hashes_hit.insert(file.hash);
             }
         }
-    }
+    });
 
     if (!FileUtils::deleteOrRenameFiles(dupes,
     [this](const QString& status) {
@@ -792,8 +815,12 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
     };
 }
 
-void MainWindow::exifRename(QSqlDatabase) {
-
+void MainWindow::exifRename(QSqlDatabase db) {
+    loadAllMetadataFromFiles(db, indexed_files,
+    [this](File& file){
+        setCurrentTask(QString("Renaming file: %1").arg(file));
+        return exifRenameFormat.rename(file);
+    });
 }
 
 void MainWindow::showStats(QSqlDatabase db) {
@@ -804,12 +831,8 @@ void MainWindow::showStats(QSqlDatabase db) {
         meta_fields_stats.append({metadata_key, {}});
     }
 
-    for(auto& file: indexed_files) {
-
-        setCurrentTask(QString("Gathering information about: %1").arg(file));
-
-        // load metadata
-        file.loadMetadata(ex_tool, db);
+    loadAllMetadataFromFiles(db, indexed_files,
+    [&meta_fields_stats](const File& file){
 
         // iterate through name-array pairs
         for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
@@ -825,9 +848,8 @@ void MainWindow::showStats(QSqlDatabase db) {
             }
         }
 
-        processed_files ++;
-        files_size_processed += file.size_bytes;
-    }
+        return true;
+    });
 
     // calculate relative percentages for all meta fileds
     for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
@@ -851,7 +873,7 @@ void MainWindow::fileCompare_display() {
 }
 
 QString MainWindow::showStats_request() {
-    Metadata_selection_dialogue selection_dialogue(this);
+    Metadata_selection_dialog selection_dialogue(this);
     selection_dialogue.setModal(true);
     int code = selection_dialogue.exec();
     selectedMetaFields = selection_dialogue.getSelected();
@@ -860,6 +882,21 @@ QString MainWindow::showStats_request() {
     }
     return "Nothing selected";
 }
+
+QString MainWindow::exifRename_request() {
+    Exif_rename_builder_dialog exif_rename_builder_dialog(this);
+    exif_rename_builder_dialog.setModal(true);
+    int code = exif_rename_builder_dialog.exec();
+    exifRenameFormat = exif_rename_builder_dialog.getFormat();
+    if(code != QDialog::Accepted) {
+        return "Nothing to do";
+    }
+    if(!exifRenameFormat.isValid()) {
+        return "Template invalid";
+    }
+    return "";
+}
+
 
 QString MainWindow::autoDedupe_request() {
     if(masterFolder.isEmpty()) {

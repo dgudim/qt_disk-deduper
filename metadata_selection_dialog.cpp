@@ -1,7 +1,9 @@
-#include "metadata_selection_dialogue.h"
+#include "metadata_selection_dialog.h"
 #include "ui_metadata_selection_dialogue.h"
 
-Metadata_selection_dialogue::Metadata_selection_dialogue(QWidget *parent) : QDialog(parent), ui(new Ui::Metadata_selection_dialogue) {
+#include "gutils.h"
+
+Metadata_selection_dialog::Metadata_selection_dialog(QWidget *parent) : QDialog(parent), ui(new Ui::Metadata_selection_dialogue) {
     ui->setupUi(this);
 
     QList<QString> meta_fileds = getMetaFieldsList();
@@ -14,11 +16,10 @@ Metadata_selection_dialogue::Metadata_selection_dialogue(QWidget *parent) : QDia
 
     ui->checkbox_container->addItem(new QSpacerItem(20, 40, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
-    connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    UiUtils::connectDialogButtonBox(this, ui->buttonBox);
 }
 
-QVector<QString> Metadata_selection_dialogue::getSelected() {
+QVector<QString> Metadata_selection_dialog::getSelected() {
     QVector<QString> selected;
     for(const auto& checkBox: qAsConst(checkBoxes)) {
         if(checkBox->checkState() == Qt::CheckState::Checked) {
@@ -28,6 +29,6 @@ QVector<QString> Metadata_selection_dialogue::getSelected() {
     return selected;
 }
 
-Metadata_selection_dialogue::~Metadata_selection_dialogue() {
+Metadata_selection_dialog::~Metadata_selection_dialog() {
     delete ui;
 }

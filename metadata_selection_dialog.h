@@ -1,5 +1,5 @@
-#ifndef METADATA_SELECTION_DIALOGUE_H
-#define METADATA_SELECTION_DIALOGUE_H
+#ifndef METADATA_SELECTION_DIALOG_H
+#define METADATA_SELECTION_DIALOG_H
 
 #include "stats_dialog.h"
 #include <QDialog>
@@ -9,12 +9,12 @@ namespace Ui {
     class Metadata_selection_dialogue;
 }
 
-class Metadata_selection_dialogue : public QDialog {
+class Metadata_selection_dialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit Metadata_selection_dialogue(QWidget *parent);
-    ~Metadata_selection_dialogue();
+    explicit Metadata_selection_dialog(QWidget *parent);
+    ~Metadata_selection_dialog();
 
     QVector<QString> getSelected();
 
@@ -26,4 +26,4 @@ private:
 
 };
 
-#endif // METADATA_SELECTION_DIALOGUE_H
+#endif // METADATA_SELECTION_DIALOG_H

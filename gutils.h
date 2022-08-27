@@ -7,6 +7,9 @@
 
 #include <QApplication>
 
+#include <QDialog>
+#include <QDialogButtonBox>
+
 #include <QString>
 #include <QStringList>
 #include <QDate>
@@ -43,7 +46,7 @@ namespace FileUtils {
                  ExtenstionFilterState extFilterState, std::function<void(const QString&)> callback);
 
     bool deleteOrRenameFiles(QVector<File>& files_to_delete,
-                             std::function<void(const QString&)> status_callback,
+                             const std::function<void (const QString &)> &status_callback,
                              bool rename = false, const QString &target_dir = "", const QString &postfix = "");
 
     QString getFileHash(const QString& full_path);
@@ -91,6 +94,15 @@ namespace DbUtils{
     bool execQuery(QSqlQuery query);
     bool execQuery(QSqlDatabase db, const QString &query_str);
     QSqlDatabase openDbConnection();
+};
+
+QT_END_NAMESPACE
+
+
+QT_BEGIN_NAMESPACE
+
+namespace UiUtils{
+    void connectDialogButtonBox(QDialog* self, QDialogButtonBox* buttonBox);
 };
 
 QT_END_NAMESPACE

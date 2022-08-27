@@ -46,6 +46,32 @@ const QMap<QString, QVector<QPair<QString, std::function<void(QString&)>>>> meta
 QMap<QString, QPair<QString, std::function<void(QString&)>>> metadataMap_field_to_name;
 const QList<QString> metaFieldsList = metadataMap_name_to_fileds.keys();
 
+void File::updateMetadata(const QFile &qfile) {
+
+    QFileInfo info(qfile);
+    path_without_name = info.fileName();
+
+    path_without_name = info.absolutePath();
+    name = info.fileName();
+    extension = info.completeSuffix().toLower();
+    size_bytes = qfile.size();
+
+    metadata["extension"] = extension;
+}
+
+bool File::rename(const QString &new_name) {
+    QFile qfile = QFile(full_path);
+    bool success = qfile.rename(QDir(path_without_name).filePath(new_name));
+    if(success) {
+        updateMetadata(qfile);
+    }
+    return success;
+}
+
+bool File::renameWithoutExtension(const QString& new_name) {
+    return rename(new_name + "." + extension);
+};
+
 void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
 
     if(metadata_loaded){
@@ -259,4 +285,99 @@ bool File::loadThumbnailFromDb(QSqlDatabase db) {
 
 QList<QString> getMetaFieldsList() {
     return metaFieldsList;
+}
+
+ExifFormat::ExifFormat(const QString &format_string_raw, OnFailAction onFailAction, OnFileExistsAction onFileExistsAction)
+    : onFailAction(onFailAction), onFileExistsAction(onFileExistsAction) {
+
+    QList<QString> metaFieldsList = getMetaFieldsList();
+
+    bool parenth_opened = false;
+    int param_index = 1;
+
+    QString metaField;
+    for(auto& ch: format_string_raw) {
+        if(ch != '[' && ch != ']') {
+            if(parenth_opened) {
+                metaField += ch;
+            } else {
+                format_string += ch;
+            }
+        }
+        if(ch == '[') {
+            if(parenth_opened) {
+                valid = false;
+                break;
+            }
+            parenth_opened = true;
+        } else if (ch == ']') {
+            if(!parenth_opened) {
+                valid = false;
+                break;
+            }
+            if(!metaFieldsList.contains(metaField)) {
+                valid = false;
+                break;
+            }
+            metaFieldKeys.append(metaField);
+            metaField = "";
+            format_string += "%" + QString::number(param_index);
+            param_index ++;
+            parenth_opened = false;
+        }
+    }
+    if(valid && parenth_opened) {
+        valid = false;
+    }
+    if(valid && format_string_raw.isEmpty()) {
+        valid = false;
+    }
+}
+
+bool ExifFormat::rename(File &file) {
+    if(valid) {
+        QString final_str = format_string;
+        for(auto& key: metaFieldKeys) {
+            if(file.metadata[key].isEmpty()) {
+                switch(onFailAction) {
+                    case OnFailAction::STOP_PROCESS:
+                        qCritical() << "stopped renaming on:" << file << ", (could not get" << key << ")";
+                        return false;
+                        break;
+                    case OnFailAction::SKIP_FILE:
+                        qWarning() << "skipped file:" << file << ", (could not get" << key << ")";
+                        return true;
+                    case OnFailAction::DO_NOTHING:
+                        break;
+                }
+            }
+            final_str = final_str.arg(file.metadata[key]);
+        }
+        bool success = file.renameWithoutExtension(final_str);
+        if(!success) {
+            switch(onFileExistsAction) {
+                case OnFileExistsAction::STOP_PROCESS:
+                    qCritical() << "stopped renaming on:" << file << ", (file already exists)";
+                    return false;
+                    break;
+                case OnFileExistsAction::SKIP_FILE:
+                    qWarning() << "skipped file:" << file << ", (file already exists)";
+                    return true;
+                    break;
+                case OnFileExistsAction::APPEND_INDEX:
+                    int index = 1;
+                    while(true) {
+                        qInfo() << "file:" << file << "already exists, trying index:" << index;
+                        success = file.renameWithoutExtension(QString("%1(%2)").arg(final_str).arg(index));
+                        index ++;
+                        if(success) {
+                            return true;
+                        }
+                    }
+                    break;
+            }
+        }
+        return true;
+    }
+    return false;
 }

@@ -35,7 +35,7 @@ void FileUtils::walkDir(const QString& dir, const QStringList& blacklisted_dirs,
 }
 
 bool FileUtils::deleteOrRenameFiles(QVector<File> &files_to_delete,
-                                    std::function<void(const QString&)> status_callback,
+                                    const std::function<void(const QString&)> &status_callback,
                                     bool rename, const QString& target_dir, const QString& postfix) {
     bool success = true;
     QString stat_msg = rename ? "renaming" : "deleting";
@@ -252,4 +252,9 @@ QSqlDatabase DbUtils::openDbConnection() {
         qCritical() << storage_db.lastError();
     }
     return storage_db;
+}
+
+void UiUtils::connectDialogButtonBox(QDialog *dialog, QDialogButtonBox *buttonBox) {
+    dialog->connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+    dialog->connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
 }
