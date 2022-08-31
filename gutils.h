@@ -59,6 +59,8 @@ namespace FileUtils {
 
     QString getFileGroupFingerprint(const QVector<File>& group);
 
+    QPixmap generateThumbnail(const File& file, int size);
+
 };
 
 QT_END_NAMESPACE

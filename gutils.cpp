@@ -1,4 +1,6 @@
 #include "gutils.h"
+#include <QIcon>
+#include <QProcess>
 
 #pragma region File utils {
 
@@ -257,4 +259,12 @@ QSqlDatabase DbUtils::openDbConnection() {
 void UiUtils::connectDialogButtonBox(QDialog *dialog, QDialogButtonBox *buttonBox) {
     dialog->connect(buttonBox, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
     dialog->connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+}
+
+QPixmap FileUtils::generateThumbnail(const File &file, int size) {
+    QDir().mkpath("./thumbnails");
+    QFile("./thumbnails/temp.png").remove();
+    QProcess::execute("ffmpeg", QStringList() << "-itsoffset" << "-1" << "-i" << file << "-vframes" << "1"
+                      << "-filter:v" << QString("scale=-1:%1").arg(size) << "./thumbnails/temp.png");
+    return QIcon("./thumbnails/temp.png").pixmap(size, size);
 }

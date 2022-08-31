@@ -153,6 +153,10 @@ void File::loadThumbnail(QSqlDatabase db) {
         QPixmap icon_pix = QIcon(full_path).pixmap(200, 200);
 
         if(icon_pix.isNull()) {
+            icon_pix = FileUtils::generateThumbnail(full_path, 200);
+        }
+
+        if(icon_pix.isNull()) {
             // try to get filetype icon from system theme
 
             QIcon icon;
