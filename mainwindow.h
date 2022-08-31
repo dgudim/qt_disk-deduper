@@ -71,7 +71,7 @@ public:
     static MainWindow *this_window;
 
 public slots:
-    static void appendToLog(const QString &msg, bool log_to_ui);
+    static void appendToLog(const QString &msg, bool log_to_ui, LogLevel log_level);
 
 private slots:
     void onAddScanFolderClicked();

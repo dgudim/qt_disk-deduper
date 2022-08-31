@@ -262,9 +262,8 @@ void UiUtils::connectDialogButtonBox(QDialog *dialog, QDialogButtonBox *buttonBo
 }
 
 QPixmap FileUtils::generateThumbnail(const File &file, int size) {
-    QDir().mkpath("./thumbnails");
-    QFile("./thumbnails/temp.png").remove();
+    QFile("./temp/thumb.png").remove();
     QProcess::execute("ffmpeg", QStringList() << "-itsoffset" << "-1" << "-i" << file << "-vframes" << "1"
-                      << "-filter:v" << QString("scale=-1:%1").arg(size) << "./thumbnails/temp.png");
-    return QIcon("./thumbnails/temp.png").pixmap(size, size);
+                      << "-filter:v" << QString("scale=-1:%1").arg(size) << "./temp/thumb.png");
+    return QIcon("./temp/thumb.png").pixmap(size, size);
 }

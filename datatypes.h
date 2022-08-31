@@ -67,6 +67,8 @@ enum class OnFileExistsAction {
     STOP_PROCESS = 2
 };
 
+enum class LogLevel { DEBUG, INFO, WARNING, ERROR };
+
 struct Countable_qstring {
     QString string;
     quint32 count;
@@ -107,6 +109,8 @@ struct File {
     }
 
     void updateMetadata(const QFile& qfile);
+
+    QString remapMetaValue(const QString& field, const QString& value);
 
     bool rename(const QString& new_name);
     bool renameWithoutExtension(const QString& new_name);

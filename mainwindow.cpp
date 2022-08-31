@@ -51,10 +51,12 @@ QList<ScanModeProperties> scan_modes = {
 MainWindow *MainWindow::this_window = 0;
 QTextStream MainWindow::currentLogFileStream;
 
+const LogLevel logLevel = LogLevel::INFO;
 QSettings settings(QSettings::UserScope, "disk_deduper_qt", "ui_state");
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
 
+    qRegisterMetaType<LogLevel>("LogLevel");
     qRegisterMetaTypeStreamOperators<FolderListItemData>("FolderListItemData");
 
     // init local sqlite database
@@ -93,6 +95,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     lastMeasuredDiskRead = FileUtils::getDiskReadSizeB();
     currentLogFileStream.setDevice(&currentLogFile);
     QDir().mkdir("./logs");
+    QDir().mkdir("./config");
+    QDir().mkdir("./temp");
 
     setCurrentTask("Idle");
 
@@ -518,18 +522,21 @@ void MainWindow::setCurrentTask(const QString &status) {
     }
 }
 
-void MainWindow::appendToLog(const QString &msg, bool log_to_ui) {
+void MainWindow::appendToLog(const QString &msg, bool log_to_ui, LogLevel log_level) {
+    if(log_level >= logLevel) {
+        currentLogFileStream << QDateTime::currentDateTime().toString("hh:mm:ss | ");
+        currentLogFileStream << msg << "<br>" << Qt::endl;
+    }
     if(!this_window) {
         return;
     }
-    if(QThread::currentThread() == this_window->thread()) {
-        if(log_to_ui) {
+    if(log_to_ui) {
+        if(QThread::currentThread() == this_window->thread()) {
             this_window->ui->log_text->insertHtml(msg);
             this_window->ui->log_text->insertHtml("<br>");
+        } else {
+            MOVE_TO_UI_THREAD("appendToLog", Q_ARG(QString, msg), Q_ARG(bool, log_to_ui), Q_ARG(LogLevel, log_level));
         }
-        currentLogFileStream << msg << "<br>" << Qt::endl;
-    } else {
-        MOVE_TO_UI_THREAD("appendToLog", Q_ARG(QString, msg), Q_ARG(bool, log_to_ui));
     }
 };
 
@@ -552,8 +559,7 @@ void MainWindow::setUiDisabled(bool disabled) {
 }
 
 void MainWindow::startNewLog() {
-    QDateTime date = QDateTime::currentDateTime();
-    QString formattedTime = date.toString("dd.MM.yyyy hh:mm:ss");
+    QString formattedTime = QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss");
     currentLogFile.close();
     currentLogFile.setFileName(QString("./logs/log_%1.html").arg(formattedTime));
     currentLogFile.open(QIODevice::WriteOnly);
@@ -811,7 +817,7 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
         setCurrentTask(status);
         qInfo() << status;
     }, true, safe ? "" : dupesFolder, safe ? "_DELETED_" : "")) {
-        appendToLog("Error occured, please refer to last status", true);
+        appendToLog("Error occured, please refer to last status", true, LogLevel::ERROR);
     };
 }
 

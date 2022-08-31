@@ -42,6 +42,11 @@ const QMap<QString, QVector<QPair<QString, std::function<void(QString&)>>>> meta
                       {"Track Duration", durationConverter}}},
 };
 
+// user-defined maps to remap any xmp value
+// for instance E5823 to some meaningfull camera name
+QMap<QString, QMap<QString, QString>> metaMaps;
+bool metaMapsLoaded = false;
+
 // procedurally generated
 QMap<QString, QPair<QString, std::function<void(QString&)>>> metadataMap_field_to_name;
 const QList<QString> metaFieldsList = metadataMap_name_to_fileds.keys();
@@ -79,8 +84,36 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
     }
     metadata_loaded = true;
 
-    if(loadMetadataFromDb(db)) {
-        return;
+    // load user metamaps
+    if(!metaMapsLoaded) {
+        metaMapsLoaded = true;
+        QFileInfoList config_files = QDir("./config").entryInfoList(QDir::Filter::Files);
+        for(auto& config_file: config_files) {
+            QString fileName = config_file.fileName();
+            if(!metadataMap_name_to_fileds.contains(fileName)) {
+                qWarning() << "Unknown config file:" << fileName;
+            } else {
+                QFile file(config_file.absoluteFilePath());
+                if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                   QTextStream in(&file);
+                   while (!in.atEnd()) {
+                      QString line = in.readLine();
+                      QStringList mapPair = line.split("=");
+                      if(mapPair.size() != 2) {
+                          qWarning() << "Invalid config file line:" << line;
+                      } else {
+                          QString key = mapPair[0].trimmed();
+                          if(metaMaps[fileName].contains(key)) {
+                               qWarning() << "Duplicate key in config file:" << fileName << "key:" << key;
+                          } else {
+                               metaMaps[fileName].insert(key, mapPair[1].trimmed());
+                          }
+                      }
+                   }
+                   file.close();
+                }
+            }
+        }
     }
 
     // construct lookup table if it doesn't exist
@@ -93,10 +126,14 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
         }
     }
 
+    if(loadMetadataFromDb(db)) {
+        return;
+    }
+
     // get known values
     QMap<QString, QString> gathered_values;
 
-    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str());
+    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n\"%Y:%m:%d %H:%M:%S\"");
     if (info) {
         for (TagInfo *i = info; i; i = i->next) {
             QString name = QString::fromUtf8(i->name);
@@ -121,7 +158,7 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
                 if(meta_field_and_converter.second){
                     meta_field_and_converter.second(value);
                 }
-                metadata.insert(out_field, value);
+                metadata.insert(out_field, remapMetaValue(out_field, value));
             }
         }
         // no suitable field was found
@@ -135,6 +172,14 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
     if (err) qWarning() << err;
 
     saveMetadataToDb(db);
+}
+
+QString File::remapMetaValue(const QString& field, const QString& value) {
+    if(metaMaps.contains(field) && metaMaps.value(field).contains(value)) {
+        qDebug() << "Mapped" << value << "to" << metaMaps[field][value];
+        return metaMaps[field][value];
+    }
+    return value;
 }
 
 void File::loadHash(QSqlDatabase db) {
@@ -251,7 +296,7 @@ bool File::loadMetadataFromDb(QSqlDatabase db) {
 
     if(query.first() && query.value(1) == size_bytes) {
         for(int i = 0; i < metaFieldsList.size(); i++) {
-            metadata.insert(metaFieldsList.at(i), query.value(i + 2).toString());
+            metadata.insert(metaFieldsList.at(i), remapMetaValue(metaFieldsList.at(i), query.value(i + 2).toString()));
         }
         return true;
     }
