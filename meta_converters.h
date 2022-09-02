@@ -15,4 +15,11 @@ void durationConverter(QString& duration) {
     }
 }
 
+void illegalCharactersRemover(QString& name) {
+    name.remove("\n");
+    name.remove("\r");
+    name.remove("\\");
+    name.remove("/");
+}
+
 #endif // META_CONVERTERS_H

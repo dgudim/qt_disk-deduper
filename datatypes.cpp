@@ -402,6 +402,7 @@ bool ExifFormat::rename(File &file) {
             }
             final_str = final_str.arg(file.metadata[key]);
         }
+        illegalCharactersRemover(final_str);
         bool success = file.renameWithoutExtension(final_str);
         if(!success) {
             switch(onFileExistsAction) {
