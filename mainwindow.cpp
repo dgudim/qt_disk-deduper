@@ -57,12 +57,8 @@ QSettings settings(QSettings::UserScope, "disk_deduper_qt", "ui_state");
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
 
-    this_window = this;
-
     qRegisterMetaType<LogLevel>("LogLevel");
     qRegisterMetaTypeStreamOperators<FolderListItemData>("FolderListItemData");
-
-    ui->setupUi(this);
 
     // init local sqlite database
     QSqlDatabase storage_db = DbUtils::openDbConnection();
@@ -88,9 +84,12 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
         DbUtils::execQuery(storage_db, init_query_thumbnails);
     }
 
+    ui->setupUi(this);
+
     setWindowTitle("Disk deduper");
 
     ex_tool = new ExifTool();
+    this_window = this;
 
     // setup initial values
     program_start_time = QDateTime::currentMSecsSinceEpoch();
@@ -329,7 +328,7 @@ void MainWindow::onStartScanButtonClicked() {
     }
 
     // reset variables
-    ui->log_text->setText("");
+    ui->app_output_label->setText("Last app output:");
     total_files = 0;
     files_size_all = 0;
     files_size_processed = 0;
@@ -528,18 +527,18 @@ void MainWindow::appendToLog(const QString &msg, bool log_to_ui, LogLevel log_le
     if(!this_window) {
         return;
     }
-    if(QThread::currentThread() != this_window->thread()) {
+    if(QThread::currentThread() == this_window->thread()) {
+        if(log_to_ui) {
+            this_window->ui->app_output_label->setText(QString("Last app output: %1").arg(msg));
+        }
+        if(log_level >= logLevel && currentLogFileStream.device()) {
+            currentLogFileStream << QDateTime::currentDateTime().toString("hh:mm:ss | ");
+            currentLogFileStream << msg << "<br>" << Qt::endl;
+        }
+    } else {
         MOVE_TO_UI_THREAD("appendToLog", Q_ARG(QString, msg), Q_ARG(bool, log_to_ui), Q_ARG(LogLevel, log_level));
     }
-    if(log_level >= logLevel && currentLogFileStream.device()) {
-        currentLogFileStream << QDateTime::currentDateTime().toString("hh:mm:ss | ");
-        currentLogFileStream << msg << "<br>" << Qt::endl;
-    }
-    if(log_to_ui) {
-        this_window->ui->log_text->insertHtml(msg);
-        this_window->ui->log_text->insertHtml("<br>");
-    }
-};
+}
 
 void MainWindow::setUiDisabled(bool disabled) {
 

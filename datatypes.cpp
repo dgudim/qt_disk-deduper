@@ -133,7 +133,7 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
     // get known values
     QMap<QString, QString> gathered_values;
 
-    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n\"%Y:%m:%d %H:%M:%S\"");
+    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n%Y:%m:%d %H:%M:%S");
     if (info) {
         for (TagInfo *i = info; i; i = i->next) {
             QString name = QString::fromUtf8(i->name);

@@ -528,11 +528,11 @@
           <property name="minimumSize">
            <size>
             <width>300</width>
-            <height>0</height>
+            <height>100</height>
            </size>
           </property>
           <property name="text">
-           <string>App output:</string>
+           <string>Last app output:</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
@@ -540,43 +540,6 @@
           <property name="wordWrap">
            <bool>true</bool>
           </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QScrollArea" name="log_scroller">
-          <property name="widgetResizable">
-           <bool>true</bool>
-          </property>
-          <widget class="QWidget" name="log_contents">
-           <property name="geometry">
-            <rect>
-             <x>0</x>
-             <y>0</y>
-             <width>358</width>
-             <height>192</height>
-            </rect>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_6">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QTextBrowser" name="log_text"/>
-            </item>
-           </layout>
-          </widget>
          </widget>
         </item>
        </layout>
