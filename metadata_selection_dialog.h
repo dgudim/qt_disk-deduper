@@ -1,12 +1,11 @@
 #ifndef METADATA_SELECTION_DIALOG_H
 #define METADATA_SELECTION_DIALOG_H
 
-#include "stats_dialog.h"
 #include <QDialog>
 #include <QCheckBox>
 
 namespace Ui {
-    class Metadata_selection_dialogue;
+    class Metadata_selection_dialog;
 }
 
 class Metadata_selection_dialog : public QDialog {
@@ -20,8 +19,10 @@ public:
 
 private:
 
-    Ui::Metadata_selection_dialogue *ui;
-    Stats_dialog *stats_dialog;
+    Ui::Metadata_selection_dialog *ui;
+
+    void checkAll();
+
     QVector<QCheckBox*> checkBoxes;
 
 };

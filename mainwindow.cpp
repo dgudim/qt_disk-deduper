@@ -2,6 +2,7 @@
 
 #include "ui_mainwindow.h"
 
+#include "stats_dialog.h"
 #include "dupe_results_dialog.h"
 #include "exif_rename_builder_dialog.h"
 #include "metadata_selection_dialog.h"
@@ -560,9 +561,11 @@ void MainWindow::setUiDisabled(bool disabled) {
 
 void MainWindow::startNewLog() {
     QString formattedTime = QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss");
-    currentLogFile.close();
-    currentLogFile.setFileName(QString("./logs/log_%1.html").arg(formattedTime));
+    //currentLogFile.close();
+    QFile currentLogFile(QString("./logs/log_%1.html").arg(formattedTime));
+    //currentLogFile.setFileName(QString("./logs/log_%1.html").arg(formattedTime));
     currentLogFile.open(QIODevice::WriteOnly);
+    QTextStream currentLogFileStream(&currentLogFile);
     currentLogFileStream << "<style> body { background: #282828; color: white } </style>";
 }
 
