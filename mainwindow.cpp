@@ -57,8 +57,12 @@ QSettings settings(QSettings::UserScope, "disk_deduper_qt", "ui_state");
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
 
+    this_window = this;
+
     qRegisterMetaType<LogLevel>("LogLevel");
     qRegisterMetaTypeStreamOperators<FolderListItemData>("FolderListItemData");
+
+    ui->setupUi(this);
 
     // init local sqlite database
     QSqlDatabase storage_db = DbUtils::openDbConnection();
@@ -84,12 +88,9 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
         DbUtils::execQuery(storage_db, init_query_thumbnails);
     }
 
-    ui->setupUi(this);
-
     setWindowTitle("Disk deduper");
 
     ex_tool = new ExifTool();
-    this_window = this;
 
     // setup initial values
     program_start_time = QDateTime::currentMSecsSinceEpoch();
@@ -524,20 +525,19 @@ void MainWindow::setCurrentTask(const QString &status) {
 }
 
 void MainWindow::appendToLog(const QString &msg, bool log_to_ui, LogLevel log_level) {
-    if(log_level >= logLevel) {
-        currentLogFileStream << QDateTime::currentDateTime().toString("hh:mm:ss | ");
-        currentLogFileStream << msg << "<br>" << Qt::endl;
-    }
     if(!this_window) {
         return;
     }
+    if(QThread::currentThread() != this_window->thread()) {
+        MOVE_TO_UI_THREAD("appendToLog", Q_ARG(QString, msg), Q_ARG(bool, log_to_ui), Q_ARG(LogLevel, log_level));
+    }
+    if(log_level >= logLevel && currentLogFileStream.device()) {
+        currentLogFileStream << QDateTime::currentDateTime().toString("hh:mm:ss | ");
+        currentLogFileStream << msg << "<br>" << Qt::endl;
+    }
     if(log_to_ui) {
-        if(QThread::currentThread() == this_window->thread()) {
-            this_window->ui->log_text->insertHtml(msg);
-            this_window->ui->log_text->insertHtml("<br>");
-        } else {
-            MOVE_TO_UI_THREAD("appendToLog", Q_ARG(QString, msg), Q_ARG(bool, log_to_ui), Q_ARG(LogLevel, log_level));
-        }
+        this_window->ui->log_text->insertHtml(msg);
+        this_window->ui->log_text->insertHtml("<br>");
     }
 };
 
@@ -561,11 +561,10 @@ void MainWindow::setUiDisabled(bool disabled) {
 
 void MainWindow::startNewLog() {
     QString formattedTime = QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss");
-    //currentLogFile.close();
+    currentLogFile.close();
     QFile currentLogFile(QString("./logs/log_%1.html").arg(formattedTime));
-    //currentLogFile.setFileName(QString("./logs/log_%1.html").arg(formattedTime));
+    currentLogFile.setFileName(QString("./logs/log_%1.html").arg(formattedTime));
     currentLogFile.open(QIODevice::WriteOnly);
-    QTextStream currentLogFileStream(&currentLogFile);
     currentLogFileStream << "<style> body { background: #282828; color: white } </style>";
 }
 
