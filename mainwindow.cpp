@@ -561,7 +561,6 @@ void MainWindow::setUiDisabled(bool disabled) {
 void MainWindow::startNewLog() {
     QString formattedTime = QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss");
     currentLogFile.close();
-    QFile currentLogFile(QString("./logs/log_%1.html").arg(formattedTime));
     currentLogFile.setFileName(QString("./logs/log_%1.html").arg(formattedTime));
     currentLogFile.open(QIODevice::WriteOnly);
     currentLogFileStream << "<style> body { background: #282828; color: white } </style>";
