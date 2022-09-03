@@ -143,6 +143,52 @@ private:
     bool loadThumbnailFromDb(QSqlDatabase db);
 };
 
+struct FileQuantitySizeCounter {
+
+private:
+
+    qint32 v_quantity = 0;
+    quint64 v_size = 0;
+
+public:
+
+    FileQuantitySizeCounter() { };
+
+    FileQuantitySizeCounter(qint32 quantity, quint64 size) : v_quantity(quantity), v_size(size) { }
+
+    qint32 num() const {
+        return v_quantity;
+    }
+
+    quint64 size() const {
+        return v_size;
+    }
+
+    QString size_readable() const;
+
+    void reset() {
+        v_quantity = 0;
+        v_size = 0;
+    }
+
+    FileQuantitySizeCounter operator+ (const FileQuantitySizeCounter & other) const {
+        return FileQuantitySizeCounter(v_quantity + other.v_quantity, v_size + other.v_size);
+    }
+
+    FileQuantitySizeCounter& operator+=(const File& file) {
+          v_quantity ++;
+          v_size += file.size_bytes;
+          return *this;
+    }
+
+    FileQuantitySizeCounter& operator+=(const QFile& file) {
+          v_quantity ++;
+          v_size += file.size();
+          return *this;
+    }
+
+};
+
 // exif rename format container
 struct ExifFormat {
 
@@ -165,15 +211,14 @@ struct ExifFormat {
 
 struct StatsContainer {
 
-    int total_files = 0;
-    quint64 total_size = 0;
+    FileQuantitySizeCounter total_files;
 
     QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
 
     StatsContainer() {};
 
-    StatsContainer (const QVector<QPair<QString, QVector<Countable_qstring>>>& meta_fields_stats, int total_files, quint64 total_size)
-        : total_files(total_files), total_size(total_size), meta_fields_stats(meta_fields_stats) {}
+    StatsContainer (const QVector<QPair<QString, QVector<Countable_qstring>>>& meta_fields_stats, const FileQuantitySizeCounter& total_files)
+        : total_files(total_files), meta_fields_stats(meta_fields_stats) {}
 };
 
 #endif // DATATYPES_H

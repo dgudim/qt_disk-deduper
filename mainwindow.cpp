@@ -149,6 +149,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     loadList("extensions", ui->extension_filter_list);
     masterFolder = settings.value("master_folder").toString();
     dupesFolder = settings.value("dupes_folder").toString();
+    ui->eta_speed_based_checkbox->setChecked(settings.value("eta_spped").toBool());
     ui->master_folder_label->setText(QString("Master folder: %1").arg(masterFolder));
     ui->dupes_folder_label->setText(QString("Dupes folder: %1").arg(dupesFolder));
 
@@ -184,6 +185,8 @@ MainWindow::~MainWindow() {
     settings.setValue("master_folder", masterFolder);
     settings.setValue("dupes_folder", dupesFolder);
 
+    settings.setValue("eta_speed", ui->eta_speed_based_checkbox->isChecked());
+
     delete ex_tool;
     delete ui;
 }
@@ -195,15 +198,15 @@ void MainWindow::updateLoop100Ms() {
     ui->uptime_label->setText(QString("Uptime: %1").arg(TimeUtils::timeSinceTimestamp(program_start_time)));
 
     // update piechart
-    series->slices().at(PiechartIndex::ALL_FILES)->setValue(total_files - processed_files);
+    series->slices().at(PiechartIndex::ALL_FILES)->setValue(total_files.num() - processed_files.num());
     // substract duplicate_files and unique_files
-    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files - duplicate_files - unique_files);
+    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files.num() - duplicate_files.num() - unique_files.num());
     // avoid negative values as preloaded_files also preloads unique_files
-    series->slices().at(PiechartIndex::DUPLICATE_FILES)->setValue(qMax(duplicate_files - preloaded_files, 0));
-    series->slices().at(PiechartIndex::PRELOADED_FILES)->setValue(preloaded_files);
+    series->slices().at(PiechartIndex::DUPLICATE_FILES)->setValue(qMax(duplicate_files.num() - preloaded_files.num(), 0));
+    series->slices().at(PiechartIndex::PRELOADED_FILES)->setValue(preloaded_files.num());
     // when preloaded_files finishes 'eating' duplicate_files the value of duplicate_files - preloaded_files
     // becomes negative and preloaded_files starts 'eating' unique_files
-    series->slices().at(PiechartIndex::UNIQUE_FILES)->setValue(unique_files + qMin(duplicate_files - preloaded_files, 0));
+    series->slices().at(PiechartIndex::UNIQUE_FILES)->setValue(unique_files.num() + qMin(duplicate_files.num() - preloaded_files.num(), 0));
 
     for (int i = 0; i < series->count(); i++){
         auto slice = series->slices().at(i);
@@ -211,31 +214,36 @@ void MainWindow::updateLoop100Ms() {
     }
 
     // update stats
-    ui->total_files_label->setText(QString("Total files: %1").arg(total_files));
-    ui->total_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_all)));
+    ui->total_files_label->setText(QString("Total files: %1").arg(total_files.num()));
+    ui->total_files_size_label->setText(QString("size: %1").arg(total_files.size_readable()));
 
-    ui->processed_files_label->setText(QString("Processed files: %1").arg(processed_files));
-    ui->processed_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_processed)));
+    ui->processed_files_label->setText(QString("Processed files: %1").arg(processed_files.num()));
+    ui->processed_files_size_label->setText(QString("size: %1").arg(processed_files.size_readable()));
 
-    ui->preloaded_files_label->setText(QString("Preloaded files: %1").arg(preloaded_files));
-    ui->preloaded_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_preloaded)));
+    ui->preloaded_files_label->setText(QString("Preloaded files: %1").arg(preloaded_files.num()));
+    ui->preloaded_files_size_label->setText(QString("size: %1").arg(preloaded_files.size_readable()));
 
-    ui->duplicate_files_label->setText(QString("Duplicate files: %1").arg(duplicate_files));
-    ui->duplicate_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_dupes)));
+    ui->duplicate_files_label->setText(QString("Duplicate files: %1").arg(duplicate_files.num()));
+    ui->duplicate_files_size_label->setText(QString("size: %1").arg(duplicate_files.size_readable()));
 
-    ui->unique_files_label->setText(QString("Unique files: %1").arg(unique_files));
-    ui->unique_files_size_label->setText(QString("size: %1").arg(FileUtils::bytesToReadable(files_size_unique)));
+    ui->unique_files_label->setText(QString("Unique files: %1").arg(unique_files.num()));
+    ui->unique_files_size_label->setText(QString("size: %1").arg(unique_files.size_readable()));
 
     if (etaMode == EtaMode::ENABLED) {
+
+        bool speed_based = ui->eta_speed_based_checkbox->isChecked();
+
         ui->time_passed_label->setText(QString("Time passed: %1").arg(TimeUtils::timeSinceTimestamp(scan_start_time)));
 
         // values that represent total number of files
-        quint64 all = total_files + duplicate_files + unique_files;
+        FileQuantitySizeCounter all_c = total_files + duplicate_files + unique_files;
+        quint64 all = speed_based ? all_c.size() : all_c.num();
         // values that represent portion of the total number of files
         // (preloaded_files is portion of duplicate_files + unique_files and processed_files is total_files)
-        quint64 processed = processed_files + preloaded_files;
+        FileQuantitySizeCounter all_p = processed_files + preloaded_files;
+        quint64 processed = speed_based ? all_p.size() : all_p.num();
 
-        QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / averageFilesPerSecond * 1000));
+        QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / ((speed_based ? averageDiskReadSpeed : averageFilesPerSecond) * 1000)));
 
         ui->eta_label->setText(eta_arg);
         setWindowTitle(QString("Disk deduper (%1%, %2 left)").arg(processed / (double)all * 100).arg(eta_arg));
@@ -251,8 +259,8 @@ void MainWindow::updateLoop2s() {
     averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
     lastMeasuredDiskRead = disk_read;
 
-    averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((processed_files + preloaded_files - previous_processed_files) / 2.0) * 0.1;
-    previous_processed_files = processed_files + preloaded_files;
+    averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((processed_files.num() + preloaded_files.num() - previous_processed_files) / 2.0) * 0.1;
+    previous_processed_files = processed_files.num() + preloaded_files.num();
 
     ui->disk_read_label->setText(QString("Disk read: %1/s").arg(FileUtils::bytesToReadable(averageDiskReadSpeed)));
     ui->items_per_sec_label->setText(QString("Items per sec: %1/s").arg(averageFilesPerSecond));
@@ -329,17 +337,12 @@ void MainWindow::onStartScanButtonClicked() {
 
     // reset variables
     ui->app_output_label->setText("Last app output:");
-    total_files = 0;
-    files_size_all = 0;
-    files_size_processed = 0;
-    processed_files = 0;
+    total_files.reset();
+    processed_files.reset();
     previous_processed_files = 0;
-    duplicate_files = 0;
-    unique_files = 0;
-    files_size_unique = 0;
-    preloaded_files = 0;
-    files_size_dupes = 0;
-    files_size_preloaded = 0;
+    duplicate_files.reset();
+    unique_files.reset();
+    preloaded_files.reset();
     indexed_files.clear();
     master_files.clear();
     averageFilesPerSecond = 0;
@@ -610,10 +613,9 @@ bool MainWindow::startScanAsync() {
     }
 
     // recalculate after removing duplicates
-    files_size_all = 0;
-    total_files = indexed_files.size();
+    total_files.reset();
     for(auto& file: indexed_files) {
-        files_size_all += file.size_bytes;
+        total_files += file;
     }
 
     // open a connection from this thread
@@ -634,8 +636,7 @@ void MainWindow::addEnumeratedFile(const QString& file, QVector<File>& files) {
     if(files.size() % 100 == 0) {
         setCurrentTask(QString("Enumerating file: %1").arg(file));
     }
-    total_files ++;
-    files_size_all += file_r.size();
+    total_files += file_r;
     files.push_back({file});
 }
 
@@ -644,8 +645,7 @@ void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, const std::
          setCurrentTask(QString("Hashing file: %1").arg(file));
          file.loadHash(db);
          callback(file);
-         processed_files ++;
-         files_size_processed += file.size_bytes;
+         processed_files += file;
      }
 }
 
@@ -656,8 +656,7 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files,
         if(!callback(file)) {
             break;
         }
-        processed_files ++;
-        files_size_processed += file.size_bytes;
+        processed_files += file;
     }
 }
 
@@ -679,18 +678,15 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
             value = file.hash;
         }
 
-        processed_files ++;
-        files_size_processed += file.size_bytes;
+        processed_files += file;
 
         setCurrentTask(QString("Comparing: %1").arg(file));
         if(duplicate_files_map.contains(value)) {
             // we have our first hit, this means that the first file is unique
             if(duplicate_files_map[value].size() == 1) {
-                unique_files ++;
-                files_size_unique += file.size_bytes;
+                unique_files += file;
             }
-            duplicate_files ++;
-            files_size_dupes += file.size_bytes;
+            duplicate_files += file;
         }
         duplicate_files_map[value].append(file);
     }
@@ -700,8 +696,7 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
             for(auto& file: group) {
                 setCurrentTask(QString("Generating preview for: %1").arg(file));
                 file.loadThumbnail(db);
-                preloaded_files ++;
-                files_size_preloaded += file.size_bytes;
+                preloaded_files += file;
             }
         }
     }
@@ -800,13 +795,11 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
     [this, &master_hashes, &dupes, &master_hashes_hit](const File& file) {
         setCurrentTask(QString("Comparing file: %1").arg(file));
         if(master_hashes.contains(file.hash)) {
-            duplicate_files ++;
-            files_size_dupes += file.size_bytes;
+            duplicate_files += file;
             dupes.append(file);
             if (!master_hashes_hit.contains(file.hash)){
                 // our first hit, increment the number on unique files
-                unique_files ++;
-                files_size_unique ++;
+                unique_files += file;
                 master_hashes_hit.insert(file.hash);
             }
         }
@@ -860,12 +853,12 @@ void MainWindow::showStats(QSqlDatabase db) {
     // calculate relative percentages for all meta fileds
     for (auto& [metadata_key, metadata_array]: meta_fields_stats) {
         for (auto& metadata_value: metadata_array) {
-            metadata_value.count_percentage = metadata_value.count / (double)total_files * 100;
-            metadata_value.size_percentage = metadata_value.total_size_bytes / (long double)files_size_all * 100;
+            metadata_value.count_percentage = metadata_value.count / (double)total_files.num() * 100;
+            metadata_value.size_percentage = metadata_value.total_size_bytes / (long double)total_files.size() * 100;
         }
     }
 
-    stat_results = {meta_fields_stats, total_files, files_size_all};
+    stat_results = {meta_fields_stats, total_files };
 }
 
 void MainWindow::fileCompare_display() {
@@ -873,7 +866,7 @@ void MainWindow::fileCompare_display() {
        displayWarning("No dupes found");
        return;
     }
-    Dupe_results_dialog dupe_results_dialog(this, dedupe_resuts, duplicate_files, files_size_dupes);
+    Dupe_results_dialog dupe_results_dialog(this, dedupe_resuts, duplicate_files);
     dupe_results_dialog.setModal(true);
     dupe_results_dialog.exec();
 }

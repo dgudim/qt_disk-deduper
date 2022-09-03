@@ -30,8 +30,8 @@ Stats_dialog::Stats_dialog(QWidget *parent, const StatsContainer& stats) : QDial
     connect(ui->discard_button, SIGNAL(clicked()), this, SLOT(reject()));
     connect(ui->save_button, SIGNAL(clicked()), this, SLOT(accept()));
 
-    ui->total_files_label->setText(QString("Total files: %1").arg(stats.total_files));
-    ui->total_size_label->setText(QString("Total size: %1").arg(FileUtils::bytesToReadable(stats.total_size)));
+    ui->total_files_label->setText(QString("Total files: %1").arg(stats.total_files.num()));
+    ui->total_size_label->setText(QString("Total size: %1").arg(stats.total_files.size_readable()));
 
     for(const auto& [stat_name, stat_data]: stats.meta_fields_stats) {
         loadTable({stat_name, "Count", "Count percentage", "Size", "Size percentage"}, stat_name, stat_data);

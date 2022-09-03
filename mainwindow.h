@@ -136,19 +136,16 @@ private:
     bool scan_active = false;
     EtaMode etaMode = EtaMode::DISABLED;
     int currentMode;
-    qint32 total_files = 0;
-    qint32 processed_files = 0; // max 4294967295
-    qint32 previous_processed_files = 0; // for measuring speed
-    qint32 duplicate_files = 0;
+    FileQuantitySizeCounter total_files;
+    FileQuantitySizeCounter processed_files; // max 4294967295
+    FileQuantitySizeCounter duplicate_files;
     // unique files for which we have duplicate files
-    qint32 unique_files = 0;
-    qint32 preloaded_files = 0;
+    FileQuantitySizeCounter unique_files;
+    FileQuantitySizeCounter preloaded_files;
+
+    // for measuring speed
+    qint32 previous_processed_files = 0;
     float averageFilesPerSecond = 0;
-    quint64 files_size_all = 0;
-    quint64 files_size_dupes = 0;
-    quint64 files_size_unique = 0;
-    quint64 files_size_processed = 0;
-    quint64 files_size_preloaded = 0;
 
     QPieSeries *series;
 

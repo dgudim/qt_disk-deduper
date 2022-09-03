@@ -15,7 +15,7 @@ class Dupe_results_dialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit Dupe_results_dialog(QWidget *parent, const MultiFileGroupArray& results, int total_files, quint64 total_size);
+    explicit Dupe_results_dialog(QWidget *parent, const MultiFileGroupArray& results, const FileQuantitySizeCounter& total_files);
     ~Dupe_results_dialog();
 
 private:

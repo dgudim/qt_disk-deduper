@@ -124,14 +124,37 @@
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="eta_label">
-          <property name="text">
-           <string>Eta:</string>
+         <layout class="QHBoxLayout" name="horizontalLayout_8">
+          <property name="spacing">
+           <number>0</number>
           </property>
-          <property name="wordWrap">
-           <bool>true</bool>
+          <property name="topMargin">
+           <number>0</number>
           </property>
-         </widget>
+          <item>
+           <widget class="QCheckBox" name="eta_speed_based_checkbox">
+            <property name="text">
+             <string>speed based</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="eta_label">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Eta:</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_3">

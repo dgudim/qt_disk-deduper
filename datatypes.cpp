@@ -332,6 +332,10 @@ bool File::loadThumbnailFromDb(QSqlDatabase db) {
     return false;
 }
 
+QString FileQuantitySizeCounter::size_readable() const {
+    return FileUtils::bytesToReadable(v_size);
+}
+
 QList<QString> getMetaFieldsList() {
     return metaFieldsList;
 }
@@ -418,7 +422,7 @@ bool ExifFormat::rename(File &file) {
                     int index = 1;
                     while(true) {
                         qInfo() << "file:" << file << "already exists, trying index:" << index;
-                        success = file.renameWithoutExtension(QString("%1(%2)").arg(final_str).arg(index));
+                        success = file.renameWithoutExtension(QString("%1_%2").arg(final_str).arg(index));
                         index ++;
                         if(success) {
                             return true;

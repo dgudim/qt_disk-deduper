@@ -7,9 +7,8 @@
 #include "clickableQLabel.h"
 #include "deletion_confirmation_dialog.h"
 #include "ui_dupe_results_dialog.h"
-#include "gutils.h"
 
-Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const MultiFileGroupArray& results, int total_files, quint64 total_size) :
+Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const MultiFileGroupArray& results, const FileQuantitySizeCounter& total_files) :
     QDialog(parent), ui(new Ui::Dupe_results_dialog) {
 
     ui->setupUi(this);
@@ -17,7 +16,7 @@ Dupe_results_dialog::Dupe_results_dialog(QWidget *parent, const MultiFileGroupAr
     setWindowTitle("View duplicate files");
 
     ui->res_label->setText(QString("Total files: %1 | Total groups: %2 | Total size: %3")
-                           .arg(total_files).arg(results.size()).arg(FileUtils::bytesToReadable(total_size)));
+                           .arg(total_files.num()).arg(results.size()).arg(total_files.size_readable()));
 
     allGroups = results;
 
@@ -54,7 +53,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
 
     QPushButton* applyButton = new QPushButton("Keep selected, delete the rest", tab_container);
 
-    connect(applyButton, &QPushButton::clicked, this, [button_groups, this](){
+    connect(applyButton, &QPushButton::clicked, tab_container, [button_groups, this](){
         QVector<File> files_to_delete;
         for(auto& button_group: *button_groups) {
             QList<QAbstractButton*> buttons = button_group->buttons();
@@ -65,8 +64,8 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
                 }
             }
         }
-        Deletion_confirmation_dialog* deleteion_confirmation_dialog = new Deletion_confirmation_dialog(this, files_to_delete);
-        connect(deleteion_confirmation_dialog, &Deletion_confirmation_dialog::accepted, this,
+        Deletion_confirmation_dialog deleteion_confirmation_dialog(this, files_to_delete);
+        connect(&deleteion_confirmation_dialog, &Deletion_confirmation_dialog::accepted, &deleteion_confirmation_dialog,
         [this]() {
             ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
             if (!ui->tabWidget->count()){
@@ -75,7 +74,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
             }
             loadNTabs(1);
         });
-        deleteion_confirmation_dialog->exec();
+        deleteion_confirmation_dialog.exec();
     });
 
     tab_contents->addWidget(applyButton);
