@@ -1,4 +1,5 @@
 #include "gutils.h"
+#include "phash.h"
 #include <QIcon>
 #include <QProcess>
 
@@ -50,10 +51,10 @@ bool FileUtils::deleteOrRenameFiles(QVector<File> &files_to_delete,
 
             QString resulting_path = dir.filePath(file.name + postfix);
 
-            status_callback(QString("Status: %1 %2 (dir %3)").arg(stat_msg, file, resulting_path));
+            status_callback(QString("Status: %1 %2 to %3").arg(stat_msg, file, resulting_path));
             if (!(rename ? file_real.rename(dir.filePath(file.name + postfix)) : file_real.remove())) {
-                status_callback(QString("Status: error %1 %2 (dir %3)").arg(stat_msg, file, resulting_path));
-                qCritical() << "Error" << stat_msg << file << "dir:" << resulting_path;
+                status_callback(QString("Status: error %1 %2 to %3)").arg(stat_msg, file, resulting_path));
+                qCritical() << "Error " + stat_msg << file << "to" << resulting_path;
                 success = false;
                 break;
             }
@@ -64,16 +65,49 @@ bool FileUtils::deleteOrRenameFiles(QVector<File> &files_to_delete,
 }
 
 
-QString FileUtils::getFileHash(const QString& full_path) {
+QByteArray FileUtils::getFileHash(const QString& full_path) {
     QFile file = QFile(full_path);
     if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error("Failed opening " + full_path.toStdString());
-    QString hash = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Algorithm::Sha256).toHex();
-    file.close();
-    return hash;
+
+    QCryptographicHash hash(QCryptographicHash::Algorithm::Sha256);
+    hash.addData(&file);
+
+    return hash.result();
+}
+
+QByteArray FileUtils::getPartialFileHash(const QString &full_path) {
+    QFile file = QFile(full_path);
+    if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error("Failed opening " + full_path.toStdString());
+    file.seek(file.size() / 2);
+    return QCryptographicHash::hash(file.read(1024), QCryptographicHash::Algorithm::Sha256);
+}
+
+
+QByteArray FileUtils::getPerceptualImageHash(const QString &full_path) {
+    QFile file = QFile("./temp/thumb_lan.png");
+    file.remove();
+    QProcess::execute("ffmpeg", QStringList() << "-i" << full_path
+                      << "-vf" << "monochrome,scale=32x32:flags=lanczos" << "./temp/thumb_lan.png");
+    if(file.exists()) {
+        QImage img("./temp/thumb_lan.png");
+        return phash(img);
+    }
+    return QByteArray();
+}
+
+
+bool FileUtils::comparePerceptualHashes(const QByteArray &hash1, const QByteArray &hash2, int similarity) {
+    double diff = 0;
+    for(int i = 0; i < hash1.size(); i++) {
+        if(hash1.at(i) != hash2.at(i)) {
+            diff ++;
+        }
+    }
+    return (diff / hash1.size() * 100) <= (100 - similarity);
 }
 
 // make sure to sort the array before passing
-QString FileUtils::getFileGroupFingerprint(const QVector<File>& group) {
+QByteArray FileUtils::getFileGroupFingerprint(const QVector<File>& group) {
     QString combined_dir;
     for(const auto& file: group) {
         combined_dir += file.path_without_name;
@@ -81,8 +115,8 @@ QString FileUtils::getFileGroupFingerprint(const QVector<File>& group) {
     return StringUtils::getStringHash(combined_dir);
 };
 
-QString StringUtils::getStringHash(const QString& string) {
-    return QCryptographicHash::hash(string.toUtf8(), QCryptographicHash::Algorithm::Sha256).toHex();
+QByteArray StringUtils::getStringHash(const QString& string) {
+    return QCryptographicHash::hash(string.toUtf8(), QCryptographicHash::Algorithm::Sha256);
 }
 
 bool StringUtils::stringStartsWith(const std::string& string, const std::string& prefix) {
@@ -263,7 +297,8 @@ void UiUtils::connectDialogButtonBox(QDialog *dialog, QDialogButtonBox *buttonBo
 
 QPixmap FileUtils::generateThumbnail(const File &file, int size) {
     QFile("./temp/thumb.png").remove();
-    QProcess::execute("ffmpeg", QStringList() << "-itsoffset" << "-1" << "-i" << file << "-vframes" << "1"
+    QProcess::execute("ffmpeg", QStringList() << "-i" << file
                       << "-filter:v" << QString("scale=-1:%1").arg(size) << "./temp/thumb.png");
     return QIcon("./temp/thumb.png").pixmap(size, size);
 }
+

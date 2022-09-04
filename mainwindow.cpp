@@ -5,7 +5,7 @@
 #include "stats_dialog.h"
 #include "dupe_results_dialog.h"
 #include "exif_rename_builder_dialog.h"
-#include "metadata_selection_dialog.h"
+#include "dynamic_selection_dialog.h"
 
 enum PiechartIndex {
     ALL_FILES = 0,
@@ -24,11 +24,12 @@ QVector<QPair<QString, QColor>> piechart_config = {
 
 enum ScanMode {
     HASH_COMPARE = 0,
-    NAME_COMPARE = 1,
-    AUTO_DEDUPE_MOVE = 2,
-    AUTO_DEDUPE_RENAME = 3,
-    EXIF_RENAME = 4,
-    SHOW_STATS = 5
+    PHASH_COMPARE = 1,
+    NAME_COMPARE = 2,
+    AUTO_DEDUPE_MOVE = 3,
+    AUTO_DEDUPE_RENAME = 4,
+    EXIF_RENAME = 5,
+    SHOW_STATS = 6
 };
 
 struct ScanModeProperties {
@@ -41,11 +42,17 @@ struct ScanModeProperties {
 
 QList<ScanModeProperties> scan_modes = {
     {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::fileCompare_display, nullptr},
+    {"Find similar files", "Compare files by perceptual hash and show results in groups for further action", &MainWindow::phashCompare, &MainWindow::fileCompare_display, nullptr},
     {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::fileCompare_display, nullptr},
     {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupe_request, nullptr},
     {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupe_request, nullptr},
     {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, nullptr, &MainWindow::exifRename_request},
     {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
+
+QList<QPair<QString, QList<QString>>> extension_bundles = {
+    {"image", {"jpg", "jpeg", "jpe", "jif", "jfif", "jfi", "png", "gif", "webp", "tiff", "tif", "heif", "heic", "raw", "arw", "cr", "cr2", "rw2", "nrw", "k25", "svg" }},
+    {"video", {"avi", "mp4", "mkv", "mk3d", "mov", "webm"}}
+};
 
 #define MOVE_TO_UI_THREAD(func, ...) QMetaObject::invokeMethod(this_window, func, Qt::QueuedConnection, __VA_ARGS__);
 
@@ -56,9 +63,6 @@ const LogLevel logLevel = LogLevel::INFO;
 QSettings settings(QSettings::UserScope, "disk_deduper_qt", "ui_state");
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWindow) {
-
-    qRegisterMetaType<LogLevel>("LogLevel");
-    qRegisterMetaTypeStreamOperators<FolderListItemData>("FolderListItemData");
 
     // init local sqlite database
     QSqlDatabase storage_db = DbUtils::openDbConnection();
@@ -72,7 +76,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
         }
 
         QString init_query_metadata = QString("CREATE TABLE IF NOT EXISTS metadata (full_path TEXT PRIMARY KEY, size INTEGER %1)").arg(columns);
-        QString init_query_hashes = "CREATE TABLE IF NOT EXISTS hashes (full_path TEXT PRIMARY KEY, size INTEGER, hash TEXT)";
+        QString init_query_hashes = "CREATE TABLE IF NOT EXISTS hashes (full_path TEXT PRIMARY KEY, size INTEGER, hash BLOB, partial_hash BLOB, perceptual_hash BLOB)";
         QString init_query_thumbnails = "CREATE TABLE IF NOT EXISTS thumbnails (full_path TEXT PRIMARY KEY, size INTEGER, thumbnail BLOB)";
 
         qInfo() << "Init db (metadata): " << init_query_metadata;
@@ -112,6 +116,11 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     ui->mode_combo_box->setCurrentIndex(mode);
     onCurrentModeChanged(mode);
 
+    // load previous similarity
+    int similarity = settings.value("similarity", 1).toInt();
+    ui->similarity_slider->setValue(similarity);
+    onSimilarityChanged(similarity);
+
     // setup piechart
     series = new QPieSeries();
 
@@ -149,7 +158,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     loadList("extensions", ui->extension_filter_list);
     masterFolder = settings.value("master_folder").toString();
     dupesFolder = settings.value("dupes_folder").toString();
-    ui->eta_speed_based_checkbox->setChecked(settings.value("eta_spped").toBool());
+    ui->speed_based_eta_checkbox->setChecked(settings.value("eta_spped").toBool());
     ui->master_folder_label->setText(QString("Master folder: %1").arg(masterFolder));
     ui->dupes_folder_label->setText(QString("Dupes folder: %1").arg(dupesFolder));
 
@@ -160,8 +169,11 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     connect(ui->set_dupes_folder_button, &QPushButton::clicked, this, &MainWindow::onSetDupesFolderClicked);
 
     connect(ui->add_extention_button, &QPushButton::clicked, this, &MainWindow::onAddExtensionButtonClicked);
+    connect(ui->add_extention_bundle_button, &QPushButton::clicked, this, &MainWindow::onAddExtensionBundleButtonClicked);
 
     connect(ui->mode_combo_box, SIGNAL(currentIndexChanged(int)), this, SLOT(onCurrentModeChanged(int)));
+
+    connect(ui->similarity_slider, &QSlider::sliderMoved, this, &MainWindow::onSimilarityChanged);
 
     // load extension filter state
     Qt::CheckState ext_filter_state = (Qt::CheckState)settings.value("ext_filter_state", FileUtils::DISABLED).toInt();
@@ -185,7 +197,8 @@ MainWindow::~MainWindow() {
     settings.setValue("master_folder", masterFolder);
     settings.setValue("dupes_folder", dupesFolder);
 
-    settings.setValue("eta_speed", ui->eta_speed_based_checkbox->isChecked());
+    settings.setValue("eta_speed", ui->speed_based_eta_checkbox->isChecked());
+    settings.setValue("similarity", ui->similarity_slider->value());
 
     delete ex_tool;
     delete ui;
@@ -231,7 +244,7 @@ void MainWindow::updateLoop100Ms() {
 
     if (etaMode == EtaMode::ENABLED) {
 
-        bool speed_based = ui->eta_speed_based_checkbox->isChecked();
+        bool speed_based = ui->speed_based_eta_checkbox->isChecked();
 
         ui->time_passed_label->setText(QString("Time passed: %1").arg(TimeUtils::timeSinceTimestamp(scan_start_time)));
 
@@ -243,7 +256,7 @@ void MainWindow::updateLoop100Ms() {
         FileQuantitySizeCounter all_p = processed_files + preloaded_files;
         quint64 processed = speed_based ? all_p.size() : all_p.num();
 
-        QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / ((speed_based ? averageDiskReadSpeed : averageFilesPerSecond) * 1000)));
+        QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / (speed_based ? averageDiskReadSpeed : averageFilesPerSecond) * 1000));
 
         ui->eta_label->setText(eta_arg);
         setWindowTitle(QString("Disk deduper (%1%, %2 left)").arg(processed / (double)all * 100).arg(eta_arg));
@@ -309,6 +322,7 @@ void MainWindow::onExtentionCheckboxStateChanged(int state) {
     }
 
     ui->add_extention_button->setDisabled(state == Qt::CheckState::Unchecked);
+    ui->add_extention_bundle_button->setDisabled(state == Qt::CheckState::Unchecked);
     ui->extension_filter_list->setDisabled(state == Qt::CheckState::Unchecked);
 }
 
@@ -316,9 +330,30 @@ void MainWindow::onAddExtensionButtonClicked() {
     addItemsToList(callTextDialogue("Input ext", "Extension:").replace(".", ""), ui->extension_filter_list, false, true);
 }
 
+void MainWindow::onAddExtensionBundleButtonClicked() {
+    Dynamic_selection_dialog selection_dialogue(this, extension_bundles);
+    selection_dialogue.setModal(true);
+    int code = selection_dialogue.exec();
+    auto selectedBundles = selection_dialogue.getSelected();
+
+    if(!selectedBundles.empty() && code == QDialog::Accepted) {
+        for(auto& pair: extension_bundles) {
+            if(selectedBundles.contains(pair.first)) {
+                addItemsToList(pair.second, ui->extension_filter_list, false, true);
+            }
+        }
+    }
+}
+
 void MainWindow::onCurrentModeChanged(int curr_mode) {
     ui->mode_description_label->setText(scan_modes.at(curr_mode).description);
     currentMode = curr_mode;
+    ui->similarity_widget->setVisible(currentMode == ScanMode::PHASH_COMPARE);
+}
+
+void MainWindow::onSimilarityChanged(int new_value) {
+    ui->similarity_label->setText(QString("Similarity:%1").arg(new_value));
+    currentSimilarity = new_value;
 }
 
 void MainWindow::onStartScanButtonClicked() {
@@ -398,7 +433,7 @@ void MainWindow::loadList(const QString &key, QListWidget *list) {
     settings.endArray();
 }
 
-void MainWindow::addItemsToList(QString text, QListWidget *list, bool canBlacklist, bool lowercase) {
+void MainWindow::addItemsToList(QString text, QListWidget *list, bool canBlacklist, bool lowercase, bool display_warning) {
 
     if (text.isEmpty() || text.isNull()) {
         return;
@@ -409,7 +444,9 @@ void MainWindow::addItemsToList(QString text, QListWidget *list, bool canBlackli
     }
 
     if (getFromList(text, list)) {
-        displayWarning("Item is already in the list");
+        if(display_warning) {
+            displayWarning("Item is already in the list");
+        }
         return;
     }
 
@@ -420,7 +457,7 @@ void MainWindow::addItemsToList(QString text, QListWidget *list, bool canBlackli
 
 void MainWindow::addItemsToList(const QStringList &textList, QListWidget *list, bool canBlacklist, bool lowercase) {
     for(const auto& text: textList) {
-        addItemsToList(text, list, canBlacklist, lowercase);
+        addItemsToList(text, list, canBlacklist, lowercase, false);
     }
 }
 
@@ -640,10 +677,10 @@ void MainWindow::addEnumeratedFile(const QString& file, QVector<File>& files) {
     files.push_back({file});
 }
 
-void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, const std::function<void(File&)>& callback) {
+void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashType hash_type, const std::function<void(File&)>& callback) {
      for (auto& file: files){
          setCurrentTask(QString("Hashing file: %1").arg(file));
-         file.loadHash(db);
+         file.loadHash(db, hash_type);
          callback(file);
          processed_files += file;
      }
@@ -663,32 +700,77 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files,
 template<FileField field>
 void MainWindow::findDuplicateFiles(QSqlDatabase db) {
 
+    MultiFile indexed_files_filtered;
+    if constexpr(field == FileField::HASH){
+
+        // map of groups of files with the same partial hash
+        QMap<QByteArray, MultiFile> probably_duplicate_files_map;
+        hashAllFiles(db, indexed_files, File::PARTIAL, [&probably_duplicate_files_map](File& file) {
+            probably_duplicate_files_map[file.partial_hash].append(file);
+        });
+
+        for(auto& fileGroup: probably_duplicate_files_map) {
+            if(fileGroup.size() > 1) {
+                indexed_files_filtered.append(fileGroup);
+            }
+        }
+        processed_files.reset();
+    } else {
+        indexed_files_filtered = indexed_files;
+    }
+
     // map of groups of files with the same key field (name or hash)
-    QMap<QString, MultiFile> duplicate_files_map;
+    QMap<QByteArray, MultiFile> duplicate_files_map;
 
     // we group all files with the same key field
-    for(auto& file: indexed_files) {
+    for(auto& file: indexed_files_filtered) {
 
-        QString value;
-        if constexpr(field == FileField::NAME){
-            value = file.name.toLower();
-        } else if constexpr(field == FileField::HASH){
+        QByteArray value;
+        if constexpr(field == FileField::NAME) {
+            value = file.name.toLower().toUtf8();
+        } else if constexpr(field == FileField::HASH) {
             setCurrentTask(QString("Hashing file: %1").arg(file));
-            file.loadHash(db);
+            file.loadHash(db, File::FULL);
             value = file.hash;
+        } else if constexpr(field == FileField::PHASH) {
+            setCurrentTask(QString("Hashing file: %1").arg(file));
+            file.loadHash(db, File::PERCEPTUAL);
+            // no perceptual hash for file (file is not an image / video)
+            if(file.perceptual_hash.isEmpty()) {
+                continue;
+            }
         }
 
         processed_files += file;
 
-        setCurrentTask(QString("Comparing: %1").arg(file));
-        if(duplicate_files_map.contains(value)) {
-            // we have our first hit, this means that the first file is unique
-            if(duplicate_files_map[value].size() == 1) {
-                unique_files += file;
+        // normal equals comparison
+        if constexpr(field == FileField::NAME || field == FileField::HASH) {
+            setCurrentTask(QString("Comparing: %1").arg(file));
+            if(duplicate_files_map.contains(value)) {
+                // we have our first hit, this means that the first file is unique
+                if(duplicate_files_map[value].size() == 1) {
+                    unique_files += file;
+                }
+                duplicate_files += file;
             }
-            duplicate_files += file;
+            duplicate_files_map[value].append(file);
+        // perceptual hashes need to be compared differently
+        } else {
+            const auto unique_hashes = duplicate_files_map.keys();
+            bool found_similar = false;
+            for(const auto& uhash: unique_hashes) {
+                if(FileUtils::comparePerceptualHashes(file.perceptual_hash, uhash, currentSimilarity)) {
+                    duplicate_files_map[uhash].append(file);
+                    duplicate_files += file;
+                    found_similar = true;
+                    break;
+                }
+            }
+            if(!found_similar) {
+                unique_files += file;
+                duplicate_files_map[file.perceptual_hash].append(file);
+            }
         }
-        duplicate_files_map[value].append(file);
     }
 
     for(auto& group: duplicate_files_map) {
@@ -708,7 +790,7 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
     // group2: /testdir3/image1.png, /testdir/image.png, /testdir2/image3.png
     // fingerprint will be the same
 
-    QMap<QString, MultiFileGroup> multiFiles_fingerprintMatched;
+    QMap<QByteArray, MultiFileGroup> multiFiles_fingerprintMatched;
 
     const QList<MultiFile> uniqueMultiFiles = duplicate_files_map.values();
 
@@ -764,6 +846,10 @@ void MainWindow::hashCompare(QSqlDatabase db) {
     findDuplicateFiles<FileField::HASH>(db);
 }
 
+void MainWindow::phashCompare(QSqlDatabase db) {
+    findDuplicateFiles<FileField::PHASH>(db);
+}
+
 void MainWindow::nameCompare(QSqlDatabase db) {
     findDuplicateFiles<FileField::NAME>(db);
 }
@@ -781,7 +867,7 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
                         extension_filter_state,
                         [this](QString file) {addEnumeratedFile(file, master_files);});
 
-    hashAllFiles(db, master_files);
+    hashAllFiles(db, master_files, File::FULL);
 
     QMap<QString, File> master_hashes;
     QSet<QString> master_hashes_hit;
@@ -791,7 +877,7 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
         master_hashes[master_file.hash] = master_file;
     }
 
-    hashAllFiles(db, indexed_files,
+    hashAllFiles(db, indexed_files, File::FULL,
     [this, &master_hashes, &dupes, &master_hashes_hit](const File& file) {
         setCurrentTask(QString("Comparing file: %1").arg(file));
         if(master_hashes.contains(file.hash)) {
@@ -805,13 +891,11 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
         }
     });
 
-    if (!FileUtils::deleteOrRenameFiles(dupes,
+    FileUtils::deleteOrRenameFiles(dupes,
     [this](const QString& status) {
         setCurrentTask(status);
         qInfo() << status;
-    }, true, safe ? "" : dupesFolder, safe ? "_DELETED_" : "")) {
-        appendToLog("Error occured, please refer to last status", true, LogLevel::ERROR);
-    };
+    }, true, safe ? "" : dupesFolder, safe ? "_DELETED_" : "");
 }
 
 void MainWindow::exifRename(QSqlDatabase db) {
@@ -872,7 +956,7 @@ void MainWindow::fileCompare_display() {
 }
 
 QString MainWindow::showStats_request() {
-    Metadata_selection_dialog selection_dialogue(this);
+    Dynamic_selection_dialog selection_dialogue(this, getMetaFieldsList());
     selection_dialogue.setModal(true);
     int code = selection_dialogue.exec();
     selectedMetaFields = selection_dialogue.getSelected();

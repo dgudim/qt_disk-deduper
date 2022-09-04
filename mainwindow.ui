@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1011</width>
-    <height>639</height>
+    <width>1063</width>
+    <height>618</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -83,6 +83,41 @@
       </widget>
      </item>
      <item>
+      <widget class="QWidget" name="similarity_widget" native="true">
+       <layout class="QHBoxLayout" name="similarity_layout">
+        <property name="spacing">
+         <number>3</number>
+        </property>
+        <property name="leftMargin">
+         <number>1</number>
+        </property>
+        <property name="topMargin">
+         <number>1</number>
+        </property>
+        <item>
+         <widget class="QSlider" name="similarity_slider">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="similarity_label">
+          <property name="text">
+           <string>Similarity:</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="start_scan_button">
        <property name="text">
         <string>Start scan</string>
@@ -132,9 +167,9 @@
            <number>0</number>
           </property>
           <item>
-           <widget class="QCheckBox" name="eta_speed_based_checkbox">
+           <widget class="QCheckBox" name="speed_based_eta_checkbox">
             <property name="text">
-             <string>speed based</string>
+             <string>Speed based</string>
             </property>
            </widget>
           </item>
@@ -412,11 +447,28 @@
       <number>3</number>
      </property>
      <item>
-      <widget class="QPushButton" name="add_extention_button">
-       <property name="text">
-        <string>Add an extention to scan</string>
+      <layout class="QHBoxLayout" name="horizontalLayout_9">
+       <property name="spacing">
+        <number>3</number>
        </property>
-      </widget>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QPushButton" name="add_extention_button">
+         <property name="text">
+          <string>Add an extention to scan</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="add_extention_bundle_button">
+         <property name="text">
+          <string>Add a bundle to scan</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item>
       <widget class="QCheckBox" name="extention_filter_enabled_checkbox">

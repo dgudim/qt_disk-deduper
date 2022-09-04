@@ -43,6 +43,7 @@ enum class EtaMode {
 
 enum class FileField {
     HASH,
+    PHASH,
     NAME
 };
 
@@ -54,7 +55,8 @@ public:
     ~MainWindow();
 
     void hashCompare(QSqlDatabase db);
-    void nameCompare(QSqlDatabase);
+    void phashCompare(QSqlDatabase db);
+    void nameCompare(QSqlDatabase db);
     void autoDedupeMove(QSqlDatabase db);
     void autoDedupeRename(QSqlDatabase db);
     void exifRename(QSqlDatabase);
@@ -80,10 +82,12 @@ private slots:
     void onSetDupesFolderClicked();
 
     void onCurrentModeChanged(int curr_mode);
+    void onSimilarityChanged(int new_value);
 
     void onStartScanButtonClicked();
 
     void onAddExtensionButtonClicked();
+    void onAddExtensionBundleButtonClicked();
     void onExtentionCheckboxStateChanged(int arg1);
 
     void removeItemFromList(const QString &text, QListWidget *list);
@@ -96,7 +100,7 @@ private:
     void updateLoop100Ms();
     void updateLoop2s();
 
-    void addItemsToList(QString text, QListWidget *list, bool canBlacklist = true, bool lowercase = false);
+    void addItemsToList(QString text, QListWidget *list, bool canBlacklist = true, bool lowercase = false, bool display_warning = true);
     void addItemsToList(const QStringList &items, QListWidget *list, bool canBlacklist = true, bool lowercase = false);
 
     void addWidgetToList(QListWidget *list, FolderListItemWidget *widget);
@@ -123,7 +127,7 @@ private:
     void displayWarning(const QString &message);
 
     bool startScanAsync();
-    void hashAllFiles(QSqlDatabase db, QVector<File>& files, const std::function<void (File &)> &callback = [](File&){});
+    void hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashType hash_type, const std::function<void (File &)> &callback = [](File&){});
     void loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool(File&)>& callback = [](File&){return true;});
 
     void setUiDisabled(bool state);
@@ -133,9 +137,9 @@ private:
     float averageDiskReadSpeed = 0;
     quint64 program_start_time = 0;
     quint64 scan_start_time = 0;
-    bool scan_active = false;
     EtaMode etaMode = EtaMode::DISABLED;
     int currentMode;
+    int currentSimilarity;
     FileQuantitySizeCounter total_files;
     FileQuantitySizeCounter processed_files; // max 4294967295
     FileQuantitySizeCounter duplicate_files;

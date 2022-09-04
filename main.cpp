@@ -38,7 +38,11 @@ void captureMessageOutput(QtMsgType type, const QMessageLogContext &context, con
 }
 
 int main(int argc, char *argv[]) {
+
     qInstallMessageHandler(captureMessageOutput);
+    qRegisterMetaType<LogLevel>("LogLevel");
+    qRegisterMetaTypeStreamOperators<FolderListItemData>("FolderListItemData");
+
     QApplication a(argc, argv);
 
     a.setApplicationName("disk_deduper_qt");

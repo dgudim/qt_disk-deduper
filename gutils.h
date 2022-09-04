@@ -49,7 +49,10 @@ namespace FileUtils {
                              const std::function<void (const QString &)> &status_callback,
                              bool rename = false, const QString &target_dir = "", const QString &postfix = "");
 
-    QString getFileHash(const QString& full_path);
+    QByteArray getFileHash(const QString& full_path);
+    QByteArray getPartialFileHash(const QString& full_path);
+    QByteArray getPerceptualImageHash(const QString& full_path);
+    bool comparePerceptualHashes(const QByteArray& hash1, const QByteArray& hash2, int similarity);
     quint64 getDiskReadSizeB();
 
     quint64 getMemUsedKb();
@@ -57,7 +60,7 @@ namespace FileUtils {
     QString bytesToReadable(quint64 kb);
     quint64 readableToBytes(const QString &str);
 
-    QString getFileGroupFingerprint(const QVector<File>& group);
+    QByteArray getFileGroupFingerprint(const QVector<File>& group);
 
     QPixmap generateThumbnail(const File& file, int size);
 
@@ -69,7 +72,7 @@ QT_END_NAMESPACE
 QT_BEGIN_NAMESPACE
 
 namespace StringUtils {
-    QString getStringHash(const QString& string);
+    QByteArray getStringHash(const QString& string);
 
     bool stringStartsWith(const std::string& string, const std::string& prefix);
     bool stringStartsWithAny(const std::string& str, std::vector<std::string>& list);
