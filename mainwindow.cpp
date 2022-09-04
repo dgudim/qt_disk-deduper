@@ -594,6 +594,8 @@ void MainWindow::setUiDisabled(bool disabled) {
     ui->set_dupes_folder_button->setDisabled(disabled);
 
     ui->start_scan_button->setDisabled(disabled);
+    ui->similarity_slider->setDisabled(disabled);
+
     ui->extention_filter_enabled_checkbox->setDisabled(disabled);
     ui->add_extention_button->setDisabled(ui->extention_filter_enabled_checkbox->checkState() == Qt::CheckState::Unchecked ? true : disabled);
 }
