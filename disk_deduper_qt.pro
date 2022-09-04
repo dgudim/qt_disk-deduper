@@ -20,35 +20,36 @@ SOURCES += \
     gutils.cpp \
     main.cpp \
     mainwindow.cpp \
-    metadata_selection_dialog.cpp \
     stats_dialog.cpp \
     ExifTool.cpp \
     ExifToolPipe.cpp \
-    TagInfo.cpp
+    TagInfo.cpp \
+    phash.cpp
 
 HEADERS += \
     clickableQLabel.h \
     datatypes.h \
     deletion_confirmation_dialog.h \
     dupe_results_dialog.h \
+    dynamic_selection_dialog.h \
     exif_rename_builder_dialog.h \
     folder_list_item.h \
     gutils.h \
     mainwindow.h \
     meta_converters.h \
-    metadata_selection_dialog.h \
     stats_dialog.h \
     ExifTool.h \
     ExifToolPipe.h \
-    TagInfo.h
+    TagInfo.h \
+    phash.h
 
 FORMS += \
     deletion_confirmation_dialog.ui \
     dupe_results_dialog.ui \
+    dynamic_selection_dialog.ui \
     exif_rename_builder_dialog.ui \
     folder_list_item.ui \
     mainwindow.ui \
-    metadata_selection_dialog.ui \
     stats_dialog.ui
 
 # Default rules for deployment.
