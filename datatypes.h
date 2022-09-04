@@ -98,9 +98,17 @@ struct File {
     QString name;
     qint64 size_bytes;
     QString extension;
-    QString hash = "";
+    QByteArray hash = "";
+    QByteArray partial_hash = "";
+    QByteArray perceptual_hash;
     QByteArray thumbnail_raw;
     QMap<QString, QString> metadata;
+
+    enum HashType {
+        FULL,
+        PARTIAL,
+        PERCEPTUAL
+    };
 
     File (){ valid = false; }
 
@@ -116,7 +124,7 @@ struct File {
     bool renameWithoutExtension(const QString& new_name);
 
     void loadMetadata(ExifTool *ex_tool, QSqlDatabase db);
-    void loadHash(QSqlDatabase db);
+    void loadHash(QSqlDatabase db, HashType hash_type);
     void loadThumbnail(QSqlDatabase db);
 
     bool operator==(const File &other) const {
@@ -138,7 +146,7 @@ private:
     void saveMetadataToDb(QSqlDatabase db);
     void saveThumbnailToDb(QSqlDatabase db);
 
-    bool loadHashFromDb(QSqlDatabase db);
+    bool loadHashFromDb(QSqlDatabase db, HashType hash_type);
     bool loadMetadataFromDb(QSqlDatabase db);
     bool loadThumbnailFromDb(QSqlDatabase db);
 };

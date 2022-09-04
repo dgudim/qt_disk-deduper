@@ -65,16 +65,14 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
             }
         }
         Deletion_confirmation_dialog deleteion_confirmation_dialog(this, files_to_delete);
-        connect(&deleteion_confirmation_dialog, &Deletion_confirmation_dialog::accepted, &deleteion_confirmation_dialog,
-        [this]() {
+        if (deleteion_confirmation_dialog.exec() == QDialog::Accepted){
             ui->tabWidget->removeTab(ui->tabWidget->currentIndex());
             if (!ui->tabWidget->count()){
                 // close dialog
                 accept();
             }
             loadNTabs(1);
-        });
-        deleteion_confirmation_dialog.exec();
+        }
     });
 
     tab_contents->addWidget(applyButton);

@@ -2,6 +2,7 @@
 #define META_CONVERTERS_H
 
 #include <QString>
+#include <QRegExp>
 
 void durationConverter(QString& duration) {
     if(duration.endsWith("(approx)")) {
@@ -16,10 +17,8 @@ void durationConverter(QString& duration) {
 }
 
 void illegalCharactersRemover(QString& name) {
-    name.remove("\n");
-    name.remove("\r");
-    name.remove("\\");
-    name.remove("/");
+    name = name.simplified();
+    name = name.replace( QRegExp( "[" + QRegExp::escape( "\\/:*?\"<>|" ) + "]" ), QString( "_" ) );
 }
 
 #endif // META_CONVERTERS_H

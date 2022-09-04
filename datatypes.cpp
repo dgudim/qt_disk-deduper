@@ -182,9 +182,19 @@ QString File::remapMetaValue(const QString& field, const QString& value) {
     return value;
 }
 
-void File::loadHash(QSqlDatabase db) {
-    if(!loadHashFromDb(db)) {
-        hash = FileUtils::getFileHash(full_path);
+void File::loadHash(QSqlDatabase db, HashType hash_type) {
+    if(!loadHashFromDb(db, hash_type)) {
+        switch (hash_type) {
+            case FULL:
+                hash = FileUtils::getFileHash(full_path);
+                break;
+            case PARTIAL:
+                partial_hash = FileUtils::getPartialFileHash(full_path);
+                break;
+            case PERCEPTUAL:
+                perceptual_hash = FileUtils::getPerceptualImageHash(full_path);
+                break;
+        }
         saveHashToDb(db);
     }
 }
@@ -239,14 +249,16 @@ void File::saveThumbnailToDb(QSqlDatabase db) {
 }
 
 void File::saveHashToDb(QSqlDatabase db) {
-    QString insertionString = QString("INSERT OR REPLACE INTO hashes (full_path, size, hash) "
-                                      "VALUES(:full_path, :size, :hash)");
+    QString insertionString = "INSERT OR REPLACE INTO hashes (full_path, size, hash, partial_hash, perceptual_hash) "
+                              "VALUES(:full_path, :size, :hash, :partial_hash, :perceptual_hash)";
     QSqlQuery query(db);
     query.prepare(insertionString);
 
     query.bindValue(":full_path", full_path);
     query.bindValue(":size", size_bytes);
     query.bindValue(":hash", hash);
+    query.bindValue(":partial_hash", partial_hash);
+    query.bindValue(":perceptual_hash", perceptual_hash);
 
     DbUtils::execQuery(query);
 }
@@ -304,16 +316,25 @@ bool File::loadMetadataFromDb(QSqlDatabase db) {
 }
 
 // load hash from database if present, return true if loading succeeded
-bool File::loadHashFromDb(QSqlDatabase db) {
+bool File::loadHashFromDb(QSqlDatabase db, HashType hash_type) {
     QSqlQuery query(db);
-    query.prepare("SELECT full_path, size, hash FROM hashes WHERE full_path = ?");
+    query.prepare("SELECT full_path, size, hash, partial_hash, perceptual_hash FROM hashes WHERE full_path = ?");
     query.bindValue(0, full_path);
 
     DbUtils::execQuery(query);
 
     if(query.first() && query.value(1) == size_bytes) {
-        hash = query.value(2).toString();
-        return true;
+        hash = query.value(2).toByteArray();
+        partial_hash = query.value(3).toByteArray();
+        perceptual_hash = query.value(4).toByteArray();
+        switch (hash_type) {
+            case FULL:
+                return !hash.isEmpty();
+            case PARTIAL:
+                return !partial_hash.isEmpty();
+            case PERCEPTUAL:
+                return !perceptual_hash.isEmpty();
+        }
     }
     return false;
 }
