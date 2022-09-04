@@ -15,13 +15,14 @@ QByteArray hash_from_dct(const std::vector<double> &dct,
                           size_t img_size,
                           size_t hash_size);
 
-QByteArray phash(QImage &image) {
+QByteArray phash(QImage &image, int img_size) {
 
     std::vector<double> dct0, dct1;
-    dct_axis_0(image, 32, dct0);
-    dct_axis_1(dct0, 32, dct1);
+    dct_axis_0(image, img_size, dct0);
+    dct_axis_1(dct0, img_size, dct1);
 
-    return hash_from_dct(dct1, 32, 8);
+    // 4 is highfreq_factor
+    return hash_from_dct(dct1, img_size, img_size / 4);
 }
 
 void dct_axis_0(const QImage &img,

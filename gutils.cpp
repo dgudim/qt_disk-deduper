@@ -83,14 +83,14 @@ QByteArray FileUtils::getPartialFileHash(const QString &full_path) {
 }
 
 
-QByteArray FileUtils::getPerceptualImageHash(const QString &full_path) {
+QByteArray FileUtils::getPerceptualImageHash(const QString &full_path, int img_size) {
     QFile file = QFile("./temp/thumb_lan.png");
     file.remove();
     QProcess::execute("ffmpeg", QStringList() << "-i" << full_path
-                      << "-vf" << "monochrome,scale=32x32:flags=lanczos" << "./temp/thumb_lan.png");
+                      << "-vf" << QString("monochrome,scale=%1x%2:flags=lanczos").arg(img_size).arg(img_size) << "./temp/thumb_lan.png");
     if(file.exists()) {
         QImage img("./temp/thumb_lan.png");
-        return phash(img);
+        return phash(img, 32);
     }
     return QByteArray();
 }

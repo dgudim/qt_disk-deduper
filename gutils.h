@@ -51,7 +51,7 @@ namespace FileUtils {
 
     QByteArray getFileHash(const QString& full_path);
     QByteArray getPartialFileHash(const QString& full_path);
-    QByteArray getPerceptualImageHash(const QString& full_path);
+    QByteArray getPerceptualImageHash(const QString& full_path, int img_size = 32);
     bool comparePerceptualHashes(const QByteArray& hash1, const QByteArray& hash2, int similarity);
     quint64 getDiskReadSizeB();
 
