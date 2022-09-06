@@ -12,7 +12,6 @@
 #include <QPieSeries>
 #include <QPieSlice>
 
-#include <QtConcurrent/QtConcurrent>
 #include <QThread>
 #include <QMetaMethod>
 #include <QDateTime>
@@ -31,6 +30,7 @@
 #include "gutils.h"
 #include "ExifTool.h"
 #include "folder_list_item.h"
+#include "concurrentMap.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -129,6 +129,7 @@ private:
     bool startScanAsync();
     void hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashType hash_type, const std::function<void (File &)> &callback = [](File&){});
     void loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool(File&)>& callback = [](File&){return true;});
+    void loadAllThumbnailsFromFiles(QSqlDatabase db, QVector<File> &files);
 
     void setUiDisabled(bool state);
 
@@ -172,7 +173,9 @@ private:
     // metadata extraction
     StatsContainer stat_results;
     QVector<QString> selectedMetaFields;
-    ExifTool *ex_tool;
+    QMap<QThread*, ptr<ExifTool>> ex_tools;
+
+    Q_INVOKABLE ExifTool* getExifToolForThread();
 
     // dedupe results
     MultiFileGroupArray dedupe_resuts;

@@ -2,6 +2,8 @@
 
 #include "ui_mainwindow.h"
 
+#include <QtConcurrent/QtConcurrent>
+
 #include "stats_dialog.h"
 #include "dupe_results_dialog.h"
 #include "exif_rename_builder_dialog.h"
@@ -92,7 +94,6 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     setWindowTitle("Disk deduper");
 
-    ex_tool = new ExifTool();
     this_window = this;
 
     // setup initial values
@@ -200,7 +201,6 @@ MainWindow::~MainWindow() {
     settings.setValue("eta_speed", ui->speed_based_eta_checkbox->isChecked());
     settings.setValue("similarity", ui->similarity_slider->value());
 
-    delete ex_tool;
     delete ui;
 }
 
@@ -516,6 +516,10 @@ void MainWindow::setListItemsDisabled(QListWidget* list, bool disable) {
 
 #pragma region MainWindow utility functions {
 
+ExifTool* MainWindow::getExifToolForThread() {
+    return ex_tools[QThread::currentThread()].get();
+}
+
 FolderListItemWidget* MainWindow::widgetFromList(QListWidget* list, int index) {
     return dynamic_cast<FolderListItemWidget*>(list->itemWidget(list->item(index)));
 }
@@ -680,24 +684,65 @@ void MainWindow::addEnumeratedFile(const QString& file, QVector<File>& files) {
 }
 
 void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashType hash_type, const std::function<void(File&)>& callback) {
-     for (auto& file: files){
-         setCurrentTask(QString("Hashing file: %1").arg(file));
-         file.loadHash(db, hash_type);
-         callback(file);
-         processed_files += file;
-     }
-}
-
-void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool (File &)> &callback){
-    for (auto& file: files){
-        setCurrentTask(QString("Getting info about file: %1").arg(file));
-        file.loadMetadata(ex_tool, db);
-        if(!callback(file)) {
-            break;
+    // threaded hash loading
+    QVector<QFuture<void>> futures;
+    for (auto& file: files) {
+        setCurrentTask(QString("Hashing file: %1").arg(file));
+        futures.append(file.loadHash(db, hash_type));
+    }
+    // save to db if the hash was computed
+    for(int i = 0; i < files.size(); i++) {
+        if(!futures[i].isCanceled()) {
+            futures[i].waitForFinished();
+            files[i].saveHashToDb(db);
         }
-        processed_files += file;
+        qInfo() << files[i].partial_hash.length();
+        setCurrentTask(QString("Hashed file: %1").arg(files[i]));
+        callback(files[i]);
+        processed_files += files[i];
     }
 }
+
+void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool (File &)> &callback) {
+
+    // threaded metadata loading
+    QVector<QFuture<void>> futures;
+    for (auto& file: files){
+        setCurrentTask(QString("Getting info about file: %1").arg(file));
+        futures.append(file.loadMetadata(getExifToolForThread(), db));
+    }
+    // save to db if the metadata was loaded
+    for(int i = 0; i < files.size(); i++){
+        if(!futures[i].isCanceled()) {
+            futures[i].waitForFinished();
+            files[i].saveMetadataToDb(db);
+        };
+        setCurrentTask(QString("Got info about file: %1").arg(files[i]));
+        if(!callback(files[i])) {
+            break;
+        }
+        processed_files += files[i];
+    }
+}
+
+void MainWindow::loadAllThumbnailsFromFiles(QSqlDatabase db, QVector<File>& files) {
+    // threaded thumbnail genration
+    QVector<QFuture<void>> futures;
+    for (auto& file: files) {
+        setCurrentTask(QString("Getting preview for file: %1").arg(file));
+        futures.append(file.loadThumbnail(db));
+    }
+    // save to db if the thumbnail was loaded
+    for(int i = 0; i < files.size(); i++) {
+        if(!futures.at(i).isCanceled()) {
+            futures[i].waitForFinished();
+            files[i].saveThumbnailToDb(db);
+        };
+        setCurrentTask(QString("Got preview for file: %1").arg(files[i]));
+        preloaded_files += files[i];
+    }
+}
+
 
 template<FileField field>
 void MainWindow::findDuplicateFiles(QSqlDatabase db) {
@@ -775,16 +820,6 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
         }
     }
 
-    for(auto& group: duplicate_files_map) {
-        if(group.size() > 1) {
-            for(auto& file: group) {
-                setCurrentTask(QString("Generating preview for: %1").arg(file));
-                file.loadThumbnail(db);
-                preloaded_files += file;
-            }
-        }
-    }
-
     // map of fingerprint-to-multiFile, fingerprint will be the same in two groups if files in 2 groups group have the same dupe locations
 
     // example
@@ -794,11 +829,11 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
 
     QMap<QByteArray, MultiFileGroup> multiFiles_fingerprintMatched;
 
-    const QList<MultiFile> uniqueMultiFiles = duplicate_files_map.values();
-
     // we group all groups bigger than 1 (at least one duplicate) with the same fingerprint
-    for(const auto& multiFile: uniqueMultiFiles) {
+    for(auto& multiFile: duplicate_files_map) {
         if(multiFile.size() > 1) {
+            // load thumbnails while we are here
+            loadAllThumbnailsFromFiles(db, multiFile);
             multiFiles_fingerprintMatched[FileUtils::getFileGroupFingerprint(multiFile)].append(multiFile);
         }
     }

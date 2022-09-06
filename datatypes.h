@@ -14,7 +14,10 @@
 #include <QMap>
 #include <QDataStream>
 
+#include <QFuture>
+
 #include <QButtonGroup>
+
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -24,6 +27,9 @@
 
 template<typename T>
 using ptr = std::shared_ptr<T>;
+
+template<typename T>
+using uptr = std::unique_ptr<T>;
 
 // stores one button group in the tab
 typedef ptr<QButtonGroup> ButtonGroup;
@@ -123,9 +129,13 @@ struct File {
     bool rename(const QString& new_name);
     bool renameWithoutExtension(const QString& new_name);
 
-    void loadMetadata(ExifTool *ex_tool, QSqlDatabase db);
-    void loadHash(QSqlDatabase db, HashType hash_type);
-    void loadThumbnail(QSqlDatabase db);
+    QFuture<void> loadMetadata(ExifTool *ex_tool, QSqlDatabase db);
+    QFuture<void> loadHash(QSqlDatabase db, HashType hash_type);
+    QFuture<void> loadThumbnail(QSqlDatabase db);
+
+    void saveHashToDb(QSqlDatabase db);
+    void saveMetadataToDb(QSqlDatabase db);
+    void saveThumbnailToDb(QSqlDatabase db);
 
     bool operator==(const File &other) const {
         return full_path == other.full_path;
@@ -139,12 +149,6 @@ struct File {
 
 private:
     QString full_path;
-
-    bool metadata_loaded = false;
-
-    void saveHashToDb(QSqlDatabase db);
-    void saveMetadataToDb(QSqlDatabase db);
-    void saveThumbnailToDb(QSqlDatabase db);
 
     bool loadHashFromDb(QSqlDatabase db, HashType hash_type);
     bool loadMetadataFromDb(QSqlDatabase db);

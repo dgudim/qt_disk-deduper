@@ -1,13 +1,18 @@
 #include "datatypes.h"
 #include "gutils.h"
 #include "meta_converters.h"
-#include <QMimeDatabase>
+
+
 #include <QApplication>
-#include <QStyle>
+
 #include <QBuffer>
+#include <QMimeDatabase>
+#include <QStyle>
 #include <QIcon>
-#include <QMimeType>
 #include <QPainter>
+#include <QMimeType>
+
+#include <QtConcurrent/QtConcurrent>
 
 QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
 
@@ -77,12 +82,7 @@ bool File::renameWithoutExtension(const QString& new_name) {
     return rename(new_name + "." + extension);
 };
 
-void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
-
-    if(metadata_loaded){
-        return;
-    }
-    metadata_loaded = true;
+QFuture<void> File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
 
     // load user metamaps
     if(!metaMapsLoaded) {
@@ -127,51 +127,54 @@ void File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
     }
 
     if(loadMetadataFromDb(db)) {
-        return;
+        QFuture<bool> future;
+        future.cancel();
+        return future;
     }
 
-    // get known values
-    QMap<QString, QString> gathered_values;
+    return QtConcurrent::run([this, ex_tool]() {
+        // get known values
+        QMap<QString, QString> gathered_values;
 
-    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n%Y:%m:%d %H:%M:%S");
-    if (info) {
-        for (TagInfo *i = info; i; i = i->next) {
-            QString name = QString::fromUtf8(i->name);
-            QString value = QString::fromUtf8(i->value);
-            if(metadataMap_field_to_name.contains(name) && !empty_values.contains(value)) {
-                gathered_values.insert(name, value);
-            }
-        }
-        delete info;
-    } else if (ex_tool->LastComplete() <= 0) {
-        qCritical() << "Error executing exiftool on " + full_path;
-    }
-
-    for(auto& out_field: metaFieldsList) {
-        // iterate thrugh all suitable fields
-        for(auto& meta_field_and_converter: metadataMap_name_to_fileds[out_field]) {
-            // check if if was returned by exiftool and is not considered empty
-            if(gathered_values.contains(meta_field_and_converter.first)) {
-
-                QString value = gathered_values[meta_field_and_converter.first].trimmed();
-                // use converter if provided
-                if(meta_field_and_converter.second){
-                    meta_field_and_converter.second(value);
+        TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n%Y:%m:%d %H:%M:%S");
+        if (info) {
+            for (TagInfo *i = info; i; i = i->next) {
+                QString name = QString::fromUtf8(i->name);
+                QString value = QString::fromUtf8(i->value);
+                if(metadataMap_field_to_name.contains(name) && !empty_values.contains(value)) {
+                    gathered_values.insert(name, value);
                 }
-                metadata.insert(out_field, remapMetaValue(out_field, value));
+            }
+            delete info;
+        } else if (ex_tool->LastComplete() <= 0) {
+            qCritical() << "Error executing exiftool on " + full_path;
+        }
+
+        for(auto& out_field: metaFieldsList) {
+            // iterate thrugh all suitable fields
+            for(auto& meta_field_and_converter: metadataMap_name_to_fileds[out_field]) {
+                // check if if was returned by exiftool and is not considered empty
+                if(gathered_values.contains(meta_field_and_converter.first)) {
+
+                    QString value = gathered_values[meta_field_and_converter.first].trimmed();
+                    // use converter if provided
+                    if(meta_field_and_converter.second){
+                        meta_field_and_converter.second(value);
+                    }
+                    metadata.insert(out_field, remapMetaValue(out_field, value));
+                }
+            }
+            // no suitable field was found
+            if (!metadata.contains(out_field)) {
+                qDebug() << "Could not get" << out_field << "for" << full_path;
+                metadata.insert(out_field, "");
             }
         }
-        // no suitable field was found
-        if (!metadata.contains(out_field)) {
-            qDebug() << "Could not get" << out_field << "for" << full_path;
-            metadata.insert(out_field, "");
-        }
-    }
 
-    char *err = ex_tool->GetError();
-    if (err) qWarning() << err;
-
-    saveMetadataToDb(db);
+        char *err = ex_tool->GetError();
+        if (err) qWarning() << err;
+        return true;
+    });
 }
 
 QString File::remapMetaValue(const QString& field, const QString& value) {
@@ -182,8 +185,13 @@ QString File::remapMetaValue(const QString& field, const QString& value) {
     return value;
 }
 
-void File::loadHash(QSqlDatabase db, HashType hash_type) {
-    if(!loadHashFromDb(db, hash_type)) {
+QFuture<void> File::loadHash(QSqlDatabase db, HashType hash_type) {
+    if(loadHashFromDb(db, hash_type)) {
+        QFuture<void> future;
+        future.cancel();
+        return future;
+    }
+    return QtConcurrent::run([hash_type, this]() {
         switch (hash_type) {
             case FULL:
                 hash = FileUtils::getFileHash(full_path);
@@ -195,15 +203,18 @@ void File::loadHash(QSqlDatabase db, HashType hash_type) {
                 perceptual_hash = FileUtils::getPerceptualImageHash(full_path);
                 break;
         }
-        saveHashToDb(db);
-    }
+    });
 }
 
 QMimeDatabase mime_database;
 
-void File::loadThumbnail(QSqlDatabase db) {
-    if(!loadThumbnailFromDb(db)) {
-
+QFuture<void> File::loadThumbnail(QSqlDatabase db) {
+    if(loadThumbnailFromDb(db)) {
+        QFuture<void> future;
+        future.cancel();
+        return future;
+    }
+    return QtConcurrent::run([this]() {
         // try to get thumbnail directly from file
         QPixmap icon_pix = QIcon(full_path).pixmap(200, 200);
 
@@ -230,8 +241,7 @@ void File::loadThumbnail(QSqlDatabase db) {
         QBuffer inBuffer( &thumbnail_raw );
         inBuffer.open( QIODevice::WriteOnly );
         icon_pix.save( &inBuffer, "PNG" );
-        saveThumbnailToDb(db);
-    }
+    });
 }
 
 void File::saveThumbnailToDb(QSqlDatabase db) {

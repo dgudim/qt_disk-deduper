@@ -15,6 +15,8 @@
 #ifndef __EXIFTOOL_H__
 #define __EXIFTOOL_H__
 
+#include <QMetaType>
+
 #include "ExifToolPipe.h"
 #include "TagInfo.h"
 
@@ -43,18 +45,18 @@
 class ExifTool
 {
 public:
-            ExifTool(const char *exec=NULL, const char *arg1=NULL);
+            ExifTool(const char *exec=nullptr, const char *arg1=nullptr);
     virtual ~ExifTool();
 
-    TagInfo *ImageInfo(const char *file, const char *opts=NULL, double timeout=NEVER);
+    TagInfo *ImageInfo(const char *file, const char *opts=nullptr, double timeout=NEVER);
 
-    int     ExtractInfo(const char *file, const char *opts=NULL);
+    int     ExtractInfo(const char *file, const char *opts=nullptr);
     TagInfo *GetInfo(int cmdNum=0, double timeout=NEVER);
 
-    int     SetNewValue(const char *tag=NULL, const char *value=NULL, int len=-1);
-    int     WriteInfo(const char *file, const char *opts=NULL, TagInfo *info=NULL);
+    int     SetNewValue(const char *tag=nullptr, const char *value=nullptr, int len=-1);
+    int     WriteInfo(const char *file, const char *opts=nullptr, TagInfo *info=nullptr);
 
-    int     Command(const char *cmd=NULL);
+    int     Command(const char *cmd=nullptr);
     int     Complete(double timeout=NEVER);
 
     int     IsRunning();
@@ -63,9 +65,9 @@ public:
     void    SetLastComplete(int lastComplete) { mLastComplete = lastComplete; }
     void    SetWaitTime(int waitTime) { mWaitTime = waitTime; }
 
-    char *  GetOutput()     { return mLastComplete > 0 ? mStdout.GetString() : NULL; }
+    char *  GetOutput()     { return mLastComplete > 0 ? mStdout.GetString() : nullptr; }
     int     GetOutputLen()  { return mLastComplete > 0 ? mStdout.GetStringLen() : 0; }
-    char *  GetError()      { return mLastComplete > 0 ? mStderr.GetString() : NULL; }
+    char *  GetError()      { return mLastComplete > 0 ? mStderr.GetString() : nullptr; }
     int     GetErrorLen()   { return mLastComplete > 0 ? mStderr.GetStringLen() : 0; } // (undocumented)
 
     int     GetSummary(const char *msg);
