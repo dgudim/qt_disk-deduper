@@ -30,7 +30,6 @@
 #include "gutils.h"
 #include "ExifTool.h"
 #include "folder_list_item.h"
-#include "concurrentMap.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -142,7 +141,8 @@ private:
     int currentMode;
     int currentSimilarity;
     FileQuantitySizeCounter total_files;
-    FileQuantitySizeCounter processed_files; // max 4294967295
+    FileQuantitySizeCounter preprocessed_files;
+    FileQuantitySizeCounter processed_files;
     FileQuantitySizeCounter duplicate_files;
     // unique files for which we have duplicate files
     FileQuantitySizeCounter unique_files;
@@ -173,9 +173,9 @@ private:
     // metadata extraction
     StatsContainer stat_results;
     QVector<QString> selectedMetaFields;
-    QMap<QThread*, ptr<ExifTool>> ex_tools;
+    QMap<QThread*, ExifTool*> ex_tools;
 
-    Q_INVOKABLE ExifTool* getExifToolForThread();
+    Q_INVOKABLE ExifTool* getExifToolForThread(QThread* calling_thread);
 
     // dedupe results
     MultiFileGroupArray dedupe_resuts;

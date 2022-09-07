@@ -82,7 +82,7 @@ bool File::renameWithoutExtension(const QString& new_name) {
     return rename(new_name + "." + extension);
 };
 
-QFuture<void> File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
+QFuture<void> File::loadMetadata(const std::function<ExifTool*(QThread* thread)> &ex_tool_factory, QSqlDatabase db) {
 
     // load user metamaps
     if(!metaMapsLoaded) {
@@ -132,9 +132,11 @@ QFuture<void> File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
         return future;
     }
 
-    return QtConcurrent::run([this, ex_tool]() {
+    return QtConcurrent::run([this, ex_tool_factory]() {
         // get known values
         QMap<QString, QString> gathered_values;
+
+        ExifTool* ex_tool = ex_tool_factory(QThread::currentThread());
 
         TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n%Y:%m:%d %H:%M:%S");
         if (info) {
@@ -173,7 +175,6 @@ QFuture<void> File::loadMetadata(ExifTool *ex_tool, QSqlDatabase db) {
 
         char *err = ex_tool->GetError();
         if (err) qWarning() << err;
-        return true;
     });
 }
 

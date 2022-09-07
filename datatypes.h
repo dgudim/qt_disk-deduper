@@ -129,7 +129,7 @@ struct File {
     bool rename(const QString& new_name);
     bool renameWithoutExtension(const QString& new_name);
 
-    QFuture<void> loadMetadata(ExifTool *ex_tool, QSqlDatabase db);
+    QFuture<void> loadMetadata(const std::function<ExifTool*(QThread* thread)> &ex_tool_factory, QSqlDatabase db);
     QFuture<void> loadHash(QSqlDatabase db, HashType hash_type);
     QFuture<void> loadThumbnail(QSqlDatabase db);
 
@@ -197,6 +197,14 @@ public:
           v_quantity ++;
           v_size += file.size();
           return *this;
+    }
+
+    bool operator > (const FileQuantitySizeCounter& file) {
+        return v_quantity > file.v_quantity;
+    }
+
+    bool operator < (const FileQuantitySizeCounter& file) {
+        return v_quantity < file.v_quantity;
     }
 
 };

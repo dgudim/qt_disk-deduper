@@ -11,18 +11,20 @@
 
 enum PiechartIndex {
     ALL_FILES = 0,
-    SCANNED_FILES = 1,
-    DUPLICATE_FILES = 2,
-    UNIQUE_FILES = 3,
-    PRELOADED_FILES = 4
+    PREPROCESSSED_FILES = 1,
+    PROCESSSED_FILES = 2,
+    DUPLICATE_FILES = 3,
+    UNIQUE_FILES = 4,
+    PRELOADED_FILES = 5
 };
 
 QVector<QPair<QString, QColor>> piechart_config = {
     {"A: %1", QColor(1, 184, 170)},
-    {"Sc: %1", QColor(3, 171, 51)},
+    {"PPr: %1", QColor(3, 191, 71)},
+    {"Pr: %1", QColor(3, 171, 51)},
     {"Dup: %1", QColor(181, 113, 4)},
     {"U: %1", QColor(138, 84, 255)},
-    {"Pr: %1", QColor(191, 140, 0)}};
+    {"Pre: %1", QColor(191, 140, 0)}};
 
 enum ScanMode {
     HASH_COMPARE = 0,
@@ -201,6 +203,10 @@ MainWindow::~MainWindow() {
     settings.setValue("eta_speed", ui->speed_based_eta_checkbox->isChecked());
     settings.setValue("similarity", ui->similarity_slider->value());
 
+    for(auto& ex_tool: ex_tools) {
+        delete ex_tool;
+    }
+
     delete ui;
 }
 
@@ -211,9 +217,10 @@ void MainWindow::updateLoop100Ms() {
     ui->uptime_label->setText(QString("Uptime: %1").arg(TimeUtils::timeSinceTimestamp(program_start_time)));
 
     // update piechart
-    series->slices().at(PiechartIndex::ALL_FILES)->setValue(total_files.num() - processed_files.num());
+    series->slices().at(PiechartIndex::ALL_FILES)->setValue(total_files.num() - qMax(processed_files.num(), preprocessed_files.num()));
+    series->slices().at(PiechartIndex::PREPROCESSSED_FILES)->setValue(preprocessed_files.num() - processed_files.num());
     // substract duplicate_files and unique_files
-    series->slices().at(PiechartIndex::SCANNED_FILES)->setValue(processed_files.num() - duplicate_files.num() - unique_files.num());
+    series->slices().at(PiechartIndex::PROCESSSED_FILES)->setValue(processed_files.num() - duplicate_files.num() - unique_files.num());
     // avoid negative values as preloaded_files also preloads unique_files
     series->slices().at(PiechartIndex::DUPLICATE_FILES)->setValue(qMax(duplicate_files.num() - preloaded_files.num(), 0));
     series->slices().at(PiechartIndex::PRELOADED_FILES)->setValue(preloaded_files.num());
@@ -229,6 +236,9 @@ void MainWindow::updateLoop100Ms() {
     // update stats
     ui->total_files_label->setText(QString("Total files: %1").arg(total_files.num()));
     ui->total_files_size_label->setText(QString("size: %1").arg(total_files.size_readable()));
+
+    ui->preprocessed_files_label->setText(QString("Preprocessed files: %1").arg(preprocessed_files.num()));
+    ui->preprocessed_files_size_label->setText(QString("size: %1").arg(preprocessed_files.size_readable()));
 
     ui->processed_files_label->setText(QString("Processed files: %1").arg(processed_files.num()));
     ui->processed_files_size_label->setText(QString("size: %1").arg(processed_files.size_readable()));
@@ -253,7 +263,7 @@ void MainWindow::updateLoop100Ms() {
         quint64 all = speed_based ? all_c.size() : all_c.num();
         // values that represent portion of the total number of files
         // (preloaded_files is portion of duplicate_files + unique_files and processed_files is total_files)
-        FileQuantitySizeCounter all_p = processed_files + preloaded_files;
+        FileQuantitySizeCounter all_p = (preprocessed_files > processed_files ? preprocessed_files : processed_files) + preloaded_files;
         quint64 processed = speed_based ? all_p.size() : all_p.num();
 
         QString eta_arg = QString("Eta: %1").arg(TimeUtils::millisecondsToReadable((all - processed) / (speed_based ? averageDiskReadSpeed : averageFilesPerSecond) * 1000));
@@ -373,6 +383,7 @@ void MainWindow::onStartScanButtonClicked() {
     // reset variables
     ui->app_output_label->setText("Last app output:");
     total_files.reset();
+    preprocessed_files.reset();
     processed_files.reset();
     previous_processed_files = 0;
     duplicate_files.reset();
@@ -516,8 +527,19 @@ void MainWindow::setListItemsDisabled(QListWidget* list, bool disable) {
 
 #pragma region MainWindow utility functions {
 
-ExifTool* MainWindow::getExifToolForThread() {
-    return ex_tools[QThread::currentThread()].get();
+ExifTool* MainWindow::getExifToolForThread(QThread* calling_thread) {
+    if(QThread::currentThread() == thread()) {
+        if(!ex_tools.contains(calling_thread)) {
+            ex_tools.insert(calling_thread, new ExifTool());
+        }
+        return ex_tools[calling_thread];
+    } else {
+        ExifTool* ex_tool;
+        QMetaObject::invokeMethod(this_window, "getExifToolForThread", Qt::BlockingQueuedConnection,
+                                  Q_RETURN_ARG(ExifTool*, ex_tool),
+                                  Q_ARG(QThread*, calling_thread));
+        return ex_tool;
+    }
 }
 
 FolderListItemWidget* MainWindow::widgetFromList(QListWidget* list, int index) {
@@ -696,10 +718,9 @@ void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashT
             futures[i].waitForFinished();
             files[i].saveHashToDb(db);
         }
-        qInfo() << files[i].partial_hash.length();
         setCurrentTask(QString("Hashed file: %1").arg(files[i]));
         callback(files[i]);
-        processed_files += files[i];
+        (hash_type == File::PARTIAL ? preprocessed_files : processed_files) += files[i];
     }
 }
 
@@ -709,7 +730,10 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files,
     QVector<QFuture<void>> futures;
     for (auto& file: files){
         setCurrentTask(QString("Getting info about file: %1").arg(file));
-        futures.append(file.loadMetadata(getExifToolForThread(), db));
+        futures.append(file.loadMetadata(
+                       [this](QThread* thread){
+                           return getExifToolForThread(thread);
+                       }, db));
     }
     // save to db if the metadata was loaded
     for(int i = 0; i < files.size(); i++){
@@ -748,7 +772,7 @@ template<FileField field>
 void MainWindow::findDuplicateFiles(QSqlDatabase db) {
 
     MultiFile indexed_files_filtered;
-    if constexpr(field == FileField::HASH){
+    if constexpr(field == FileField::HASH) {
 
         // map of groups of files with the same partial hash
         QMap<QByteArray, MultiFile> probably_duplicate_files_map;
@@ -761,9 +785,14 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
                 indexed_files_filtered.append(fileGroup);
             }
         }
-        processed_files.reset();
+
+        hashAllFiles(db, indexed_files_filtered, File::FULL);
     } else {
         indexed_files_filtered = indexed_files;
+    }
+
+    if constexpr(field == FileField::PHASH) {
+        hashAllFiles(db, indexed_files_filtered, File::PERCEPTUAL);
     }
 
     // map of groups of files with the same key field (name or hash)
@@ -776,19 +805,13 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
         if constexpr(field == FileField::NAME) {
             value = file.name.toLower().toUtf8();
         } else if constexpr(field == FileField::HASH) {
-            setCurrentTask(QString("Hashing file: %1").arg(file));
-            file.loadHash(db, File::FULL);
             value = file.hash;
         } else if constexpr(field == FileField::PHASH) {
-            setCurrentTask(QString("Hashing file: %1").arg(file));
-            file.loadHash(db, File::PERCEPTUAL);
             // no perceptual hash for file (file is not an image / video)
             if(file.perceptual_hash.isEmpty()) {
                 continue;
             }
         }
-
-        processed_files += file;
 
         // normal equals comparison
         if constexpr(field == FileField::NAME || field == FileField::HASH) {
@@ -819,6 +842,16 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
             }
         }
     }
+
+        for(auto& group: duplicate_files_map) {
+            if(group.size() > 1) {
+                //for(auto& file: group) {
+                //    setCurrentTask(QString("Generating preview for: %1").arg(file));
+                //    file.loadThumbnail(db);
+                //    preloaded_files += file;
+                //}
+            }
+        }
 
     // map of fingerprint-to-multiFile, fingerprint will be the same in two groups if files in 2 groups group have the same dupe locations
 

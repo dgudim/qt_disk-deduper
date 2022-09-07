@@ -84,12 +84,13 @@ QByteArray FileUtils::getPartialFileHash(const QString &full_path) {
 
 
 QByteArray FileUtils::getPerceptualImageHash(const QString &full_path, int img_size) {
-    QFile file = QFile("./temp/thumb_lan.png");
+    QString filename = QString("./temp/thumb_lan%1.png").arg((uintptr_t)QThread::currentThread());
+    QFile file = QFile(filename);
     file.remove();
     QProcess::execute("ffmpeg", QStringList() << "-i" << full_path
-                      << "-vf" << QString("monochrome,scale=%1x%2:flags=lanczos").arg(img_size).arg(img_size) << "./temp/thumb_lan.png");
+                      << "-vf" << QString("monochrome,scale=%1x%2:flags=lanczos").arg(img_size).arg(img_size) << filename);
     if(file.exists()) {
-        QImage img("./temp/thumb_lan.png");
+        QImage img(filename);
         return phash(img, 32);
     }
     return QByteArray();
@@ -296,9 +297,10 @@ void UiUtils::connectDialogButtonBox(QDialog *dialog, QDialogButtonBox *buttonBo
 }
 
 QPixmap FileUtils::generateThumbnail(const File &file, int size) {
-    QFile("./temp/thumb.png").remove();
+    QString filename = QString("./temp/thumb%1.png").arg((uintptr_t)QThread::currentThread());
+    QFile(filename).remove();
     QProcess::execute("ffmpeg", QStringList() << "-i" << file
-                      << "-filter:v" << QString("scale=-1:%1").arg(size) << "./temp/thumb.png");
-    return QIcon("./temp/thumb.png").pixmap(size, size);
+                      << "-filter:v" << QString("scale=-1:%1").arg(size) << filename);
+    return QIcon(filename).pixmap(size, size);
 }
 

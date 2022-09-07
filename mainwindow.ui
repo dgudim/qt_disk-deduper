@@ -240,6 +240,30 @@
          </layout>
         </item>
         <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_10">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="preprocessed_files_label">
+            <property name="text">
+             <string>Preprocessed files:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="preprocessed_files_size_label">
+            <property name="text">
+             <string>size:</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <layout class="QHBoxLayout" name="horizontalLayout_4">
           <property name="spacing">
            <number>0</number>
