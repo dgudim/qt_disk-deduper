@@ -228,7 +228,7 @@ void MainWindow::updateLoop100Ms() {
     // becomes negative and preloaded_files starts 'eating' unique_files
     series->slices().at(PiechartIndex::UNIQUE_FILES)->setValue(unique_files.num() + qMin(duplicate_files.num() - preloaded_files.num(), 0));
 
-    for (int i = 0; i < series->count(); i++){
+    for (int i = 0; i < series->count(); i++) {
         auto slice = series->slices().at(i);
         slice->setLabel(QString(piechart_config[i].first).arg(slice->value()));
     }
@@ -760,6 +760,7 @@ void MainWindow::loadAllThumbnailsFromFiles(QSqlDatabase db, QVector<File>& file
     for(int i = 0; i < files.size(); i++) {
         if(!futures.at(i).isCanceled()) {
             futures[i].waitForFinished();
+            files[i].postLoadThumbnail();
             files[i].saveThumbnailToDb(db);
         };
         setCurrentTask(QString("Got preview for file: %1").arg(files[i]));

@@ -107,7 +107,7 @@ struct File {
     QByteArray hash = "";
     QByteArray partial_hash = "";
     QByteArray perceptual_hash;
-    QByteArray thumbnail_raw;
+    QPixmap thumbnail;
     QMap<QString, QString> metadata;
 
     enum HashType {
@@ -132,6 +132,7 @@ struct File {
     QFuture<void> loadMetadata(const std::function<ExifTool*(QThread* thread)> &ex_tool_factory, QSqlDatabase db);
     QFuture<void> loadHash(QSqlDatabase db, HashType hash_type);
     QFuture<void> loadThumbnail(QSqlDatabase db);
+    void postLoadThumbnail();
 
     void saveHashToDb(QSqlDatabase db);
     void saveMetadataToDb(QSqlDatabase db);
