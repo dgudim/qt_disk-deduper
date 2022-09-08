@@ -82,8 +82,7 @@ bool File::renameWithoutExtension(const QString& new_name) {
     return rename(new_name + "." + extension);
 };
 
-QFuture<void> File::loadMetadata(const std::function<ExifTool*(QThread* thread)> &ex_tool_factory, QSqlDatabase db) {
-
+void File::loadStatisMetaMaps() {
     // load user metamaps
     if(!metaMapsLoaded) {
         metaMapsLoaded = true;
@@ -125,57 +124,50 @@ QFuture<void> File::loadMetadata(const std::function<ExifTool*(QThread* thread)>
             }
         }
     }
+}
 
-    if(loadMetadataFromDb(db)) {
-        QFuture<bool> future;
-        future.cancel();
-        return future;
+void File::loadMetadataFromExifTool(ExifTool* ex_tool) {
+
+    // get known values
+    QMap<QString, QString> gathered_values;
+
+    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n%Y:%m:%d %H:%M:%S");
+    if (info) {
+        for (TagInfo *i = info; i; i = i->next) {
+            QString name = QString::fromUtf8(i->name);
+            QString value = QString::fromUtf8(i->value);
+            if(metadataMap_field_to_name.contains(name) && !empty_values.contains(value)) {
+                gathered_values.insert(name, value);
+            }
+        }
+        delete info;
+    } else if (ex_tool->LastComplete() <= 0) {
+        qCritical() << "Error executing exiftool on " + full_path;
     }
 
-    return QtConcurrent::run([this, ex_tool_factory]() {
-        // get known values
-        QMap<QString, QString> gathered_values;
+    for(auto& out_field: metaFieldsList) {
+        // iterate thrugh all suitable fields
+        for(auto& meta_field_and_converter: metadataMap_name_to_fileds[out_field]) {
+            // check if if was returned by exiftool and is not considered empty
+            if(gathered_values.contains(meta_field_and_converter.first)) {
 
-        ExifTool* ex_tool = ex_tool_factory(QThread::currentThread());
-
-        TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n%Y:%m:%d %H:%M:%S");
-        if (info) {
-            for (TagInfo *i = info; i; i = i->next) {
-                QString name = QString::fromUtf8(i->name);
-                QString value = QString::fromUtf8(i->value);
-                if(metadataMap_field_to_name.contains(name) && !empty_values.contains(value)) {
-                    gathered_values.insert(name, value);
+                QString value = gathered_values[meta_field_and_converter.first].trimmed();
+                // use converter if provided
+                if(meta_field_and_converter.second){
+                    meta_field_and_converter.second(value);
                 }
-            }
-            delete info;
-        } else if (ex_tool->LastComplete() <= 0) {
-            qCritical() << "Error executing exiftool on " + full_path;
-        }
-
-        for(auto& out_field: metaFieldsList) {
-            // iterate thrugh all suitable fields
-            for(auto& meta_field_and_converter: metadataMap_name_to_fileds[out_field]) {
-                // check if if was returned by exiftool and is not considered empty
-                if(gathered_values.contains(meta_field_and_converter.first)) {
-
-                    QString value = gathered_values[meta_field_and_converter.first].trimmed();
-                    // use converter if provided
-                    if(meta_field_and_converter.second){
-                        meta_field_and_converter.second(value);
-                    }
-                    metadata.insert(out_field, remapMetaValue(out_field, value));
-                }
-            }
-            // no suitable field was found
-            if (!metadata.contains(out_field)) {
-                qDebug() << "Could not get" << out_field << "for" << full_path;
-                metadata.insert(out_field, "");
+                metadata.insert(out_field, remapMetaValue(out_field, value));
             }
         }
+        // no suitable field was found
+        if (!metadata.contains(out_field)) {
+            qDebug() << "Could not get" << out_field << "for" << full_path;
+            metadata.insert(out_field, "");
+        }
+    }
 
-        char *err = ex_tool->GetError();
-        if (err) qWarning() << err;
-    });
+    char *err = ex_tool->GetError();
+    if (err) qWarning() << err;
 }
 
 QString File::remapMetaValue(const QString& field, const QString& value) {
@@ -364,7 +356,7 @@ bool File::loadThumbnailFromDb(QSqlDatabase db) {
     DbUtils::execQuery(query);
 
     if(query.first() && query.value(1) == size_bytes) {
-        thumbnail_raw = query.value(2).toByteArray();
+        thumbnail.loadFromData(query.value(2).toByteArray());
         return true;
     }
     return false;

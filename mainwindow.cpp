@@ -94,6 +94,10 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     ui->setupUi(this);
 
+    for(int i = 0; i < QThreadPool::globalInstance()->maxThreadCount(); i++) {
+        ex_tools.append(new ExifTool());
+    }
+
     setWindowTitle("Disk deduper");
 
     this_window = this;
@@ -105,6 +109,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
     QDir().mkdir("./logs");
     QDir().mkdir("./config");
     QDir().mkdir("./temp");
+
+    File::loadStatisMetaMaps();
 
     setCurrentTask("Idle");
 
@@ -218,7 +224,8 @@ void MainWindow::updateLoop100Ms() {
 
     // update piechart
     series->slices().at(PiechartIndex::ALL_FILES)->setValue(total_files.num() - qMax(processed_files.num(), preprocessed_files.num()));
-    series->slices().at(PiechartIndex::PREPROCESSSED_FILES)->setValue(preprocessed_files.num() - processed_files.num());
+    // limit to 0 because we may load files withoud preloading
+    series->slices().at(PiechartIndex::PREPROCESSSED_FILES)->setValue(qMax(preprocessed_files.num() - processed_files.num(), 0));
     // substract duplicate_files and unique_files
     series->slices().at(PiechartIndex::PROCESSSED_FILES)->setValue(processed_files.num() - duplicate_files.num() - unique_files.num());
     // avoid negative values as preloaded_files also preloads unique_files
@@ -527,21 +534,6 @@ void MainWindow::setListItemsDisabled(QListWidget* list, bool disable) {
 
 #pragma region MainWindow utility functions {
 
-ExifTool* MainWindow::getExifToolForThread(QThread* calling_thread) {
-    if(QThread::currentThread() == thread()) {
-        if(!ex_tools.contains(calling_thread)) {
-            ex_tools.insert(calling_thread, new ExifTool());
-        }
-        return ex_tools[calling_thread];
-    } else {
-        ExifTool* ex_tool;
-        QMetaObject::invokeMethod(this_window, "getExifToolForThread", Qt::BlockingQueuedConnection,
-                                  Q_RETURN_ARG(ExifTool*, ex_tool),
-                                  Q_ARG(QThread*, calling_thread));
-        return ex_tool;
-    }
-}
-
 FolderListItemWidget* MainWindow::widgetFromList(QListWidget* list, int index) {
     return dynamic_cast<FolderListItemWidget*>(list->itemWidget(list->item(index)));
 }
@@ -724,28 +716,58 @@ void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashT
     }
 }
 
-void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool (File &)> &callback) {
+void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all, const std::function<bool (File &)> &callback) {
 
-    // threaded metadata loading
-    QVector<QFuture<void>> futures;
-    for (auto& file: files){
-        setCurrentTask(QString("Getting info about file: %1").arg(file));
-        futures.append(file.loadMetadata(
-                       [this](QThread* thread){
-                           return getExifToolForThread(thread);
-                       }, db));
-    }
-    // save to db if the metadata was loaded
-    for(int i = 0; i < files.size(); i++){
-        if(!futures[i].isCanceled()) {
-            futures[i].waitForFinished();
-            files[i].saveMetadataToDb(db);
-        };
-        setCurrentTask(QString("Got info about file: %1").arg(files[i]));
-        if(!callback(files[i])) {
-            break;
+    MultiFile files;
+    for(auto& file: files_all) {
+        // check if we need to get metadata using exiftool
+        setCurrentTask(QString("Checking db data of file: %1").arg(file));
+        if(!file.loadMetadataFromDb(db)) {
+            files.append(file);
         }
-        processed_files += files[i];
+    }
+
+    // split into chunks for multithreaded processing
+    MultiFileGroup split_groups;
+    int idealSize = files.size() / ex_tools.size();
+
+    QVector<QFuture<void>> futures;
+    if(idealSize > 100) {
+        for(int group = 0; group < ex_tools.size(); group++) {
+            for(int file = 0; file < idealSize; file++) {
+                if(split_groups.size() > group) {
+                    split_groups[group].append(files[file]);
+                } else {
+                    split_groups.append({files[file]});
+                }
+                if(file > files.size()) {
+                    break;
+                }
+            }
+            // chunk threaded metadata loading
+            futures.append(QtConcurrent::run([group, &split_groups, this]() {
+                for(auto& file: split_groups[group]) {
+                    setCurrentTask(QString("Getting info about file: %1").arg(file));
+                    file.loadMetadataFromExifTool(ex_tools[group]);
+                    preprocessed_files += file;
+                }
+            }));
+        }
+    } else {
+        split_groups[0] = files;
+    }
+
+    // save to db if the metadata was loaded
+    for(int i = 0; i < futures.size(); i++){
+        futures[i].waitForFinished();
+        for(auto& file: split_groups[i]) {
+            setCurrentTask(QString("Got info about file: %1").arg(file));
+            file.saveMetadataToDb(db);
+            if(!callback(file)) {
+                break;
+            }
+            processed_files += file;
+        }
     }
 }
 
@@ -843,16 +865,6 @@ void MainWindow::findDuplicateFiles(QSqlDatabase db) {
             }
         }
     }
-
-        for(auto& group: duplicate_files_map) {
-            if(group.size() > 1) {
-                //for(auto& file: group) {
-                //    setCurrentTask(QString("Generating preview for: %1").arg(file));
-                //    file.loadThumbnail(db);
-                //    preloaded_files += file;
-                //}
-            }
-        }
 
     // map of fingerprint-to-multiFile, fingerprint will be the same in two groups if files in 2 groups group have the same dupe locations
 

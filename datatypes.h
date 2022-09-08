@@ -129,7 +129,10 @@ struct File {
     bool rename(const QString& new_name);
     bool renameWithoutExtension(const QString& new_name);
 
-    QFuture<void> loadMetadata(const std::function<ExifTool*(QThread* thread)> &ex_tool_factory, QSqlDatabase db);
+    static void loadStatisMetaMaps();
+
+    bool loadMetadataFromDb(QSqlDatabase db);
+    void loadMetadataFromExifTool(ExifTool* ex_tool);
     QFuture<void> loadHash(QSqlDatabase db, HashType hash_type);
     QFuture<void> loadThumbnail(QSqlDatabase db);
     void postLoadThumbnail();
@@ -152,7 +155,6 @@ private:
     QString full_path;
 
     bool loadHashFromDb(QSqlDatabase db, HashType hash_type);
-    bool loadMetadataFromDb(QSqlDatabase db);
     bool loadThumbnailFromDb(QSqlDatabase db);
 };
 

@@ -138,9 +138,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
             filename_label->setAlignment(Qt::AlignTop);
 
             // load thumbnail
-            QPixmap thumbnail;
-            thumbnail.loadFromData(file.thumbnail_raw);
-            preview_label->setPixmap(thumbnail);
+            preview_label->setPixmap(file.thumbnail);
             preview_container->addWidget(preview_label);
 
 

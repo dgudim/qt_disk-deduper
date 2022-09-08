@@ -173,9 +173,7 @@ private:
     // metadata extraction
     StatsContainer stat_results;
     QVector<QString> selectedMetaFields;
-    QMap<QThread*, ExifTool*> ex_tools;
-
-    Q_INVOKABLE ExifTool* getExifToolForThread(QThread* calling_thread);
+    QVector<ExifTool*> ex_tools;
 
     // dedupe results
     MultiFileGroupArray dedupe_resuts;
