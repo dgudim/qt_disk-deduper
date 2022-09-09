@@ -153,7 +153,7 @@ void File::loadMetadataFromExifTool(ExifTool* ex_tool) {
 
                 QString value = gathered_values[meta_field_and_converter.first].trimmed();
                 // use converter if provided
-                if(meta_field_and_converter.second){
+                if(meta_field_and_converter.second) {
                     meta_field_and_converter.second(value);
                 }
                 metadata.insert(out_field, remapMetaValue(out_field, value));

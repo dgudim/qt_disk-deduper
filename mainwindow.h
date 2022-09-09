@@ -173,6 +173,7 @@ private:
     // metadata extraction
     StatsContainer stat_results;
     QVector<QString> selectedMetaFields;
+    int idealThreadCount = 0;
     QVector<ExifTool*> ex_tools;
 
     // dedupe results

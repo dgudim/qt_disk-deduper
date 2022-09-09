@@ -94,7 +94,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), ui(new Ui::MainWin
 
     ui->setupUi(this);
 
-    for(int i = 0; i < QThreadPool::globalInstance()->maxThreadCount(); i++) {
+    idealThreadCount = QThreadPool::globalInstance()->maxThreadCount();
+    for(int i = 0; i < idealThreadCount; i++) {
         ex_tools.append(new ExifTool());
     }
 
@@ -663,6 +664,12 @@ bool MainWindow::startScanAsync() {
         }
     }
 
+    quint64 size = 0;
+    for(auto& file: indexed_files) {
+        size += file.size_bytes;
+    }
+    qInfo() << FileUtils::bytesToReadable(size);
+
     // remove duplicates
     removeDuplicates(indexed_files);
 
@@ -729,46 +736,40 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all,
     }
 
     // split into chunks for multithreaded processing
-    MultiFileGroup split_groups;
-    int idealSize = files.size() / ex_tools.size();
 
     QVector<QFuture<void>> futures;
-    if(idealSize > 100) {
-        for(int group = 0; group < ex_tools.size(); group++) {
-            for(int file = 0; file < idealSize; file++) {
-                if(split_groups.size() > group) {
-                    split_groups[group].append(files[file]);
-                } else {
-                    split_groups.append({files[file]});
-                }
-                if(file > files.size()) {
-                    break;
-                }
-            }
-            // chunk threaded metadata loading
-            futures.append(QtConcurrent::run([group, &split_groups, this]() {
-                for(auto& file: split_groups[group]) {
-                    setCurrentTask(QString("Getting info about file: %1").arg(file));
-                    file.loadMetadataFromExifTool(ex_tools[group]);
-                    preprocessed_files += file;
+    if(files.size() / idealThreadCount > 100) {
+        for(int offset = 0; offset < ex_tools.size(); offset++) {
+            futures.append(QtConcurrent::run([&files, this, offset]() {
+                for(int i = offset; i < files.size(); i+= idealThreadCount) {
+                    setCurrentTask(QString("Getting info about file: %1").arg(files[i]));
+                    files[i].loadMetadataFromExifTool(ex_tools[offset]);
+                    preprocessed_files += files[i];
                 }
             }));
         }
     } else {
-        split_groups[0] = files;
+        futures.append(QtConcurrent::run([&files, this]() {
+            for(int i = 0; i < files.size(); i++) {
+                setCurrentTask(QString("Getting info about file: %1").arg(files[i]));
+                files[i].loadMetadataFromExifTool(ex_tools[0]);
+                preprocessed_files += files[i];
+            }
+        }));
     }
 
     // save to db if the metadata was loaded
-    for(int i = 0; i < futures.size(); i++){
+    for(int i = 0; i < futures.size(); i++) {
         futures[i].waitForFinished();
-        for(auto& file: split_groups[i]) {
-            setCurrentTask(QString("Got info about file: %1").arg(file));
-            file.saveMetadataToDb(db);
-            if(!callback(file)) {
-                break;
-            }
-            processed_files += file;
+    }
+
+    for(auto& file: files) {
+        setCurrentTask(QString("Got info about file: %1").arg(file));
+        file.saveMetadataToDb(db);
+        if(!callback(file)) {
+            break;
         }
+        processed_files += file;
     }
 }
 

@@ -25,6 +25,8 @@
 
 #include "ExifTool.h"
 
+#include <shared_mutex>
+
 template<typename T>
 using ptr = std::shared_ptr<T>;
 
@@ -162,14 +164,26 @@ struct FileQuantitySizeCounter {
 
 private:
 
+    std::shared_mutex mutex;
     qint32 v_quantity = 0;
     quint64 v_size = 0;
 
+    FileQuantitySizeCounter(qint32 quantity, quint64 size) : v_quantity(quantity), v_size(size) { }
+
 public:
 
-    FileQuantitySizeCounter() { };
+    const FileQuantitySizeCounter& operator= (const FileQuantitySizeCounter &other) {
+        std::unique_lock lock(mutex);
+        v_quantity = other.v_quantity;
+        v_size = other.v_size;
+        return *this;
+    }
 
-    FileQuantitySizeCounter(qint32 quantity, quint64 size) : v_quantity(quantity), v_size(size) { }
+    FileQuantitySizeCounter(const FileQuantitySizeCounter &other) {
+        *this = other;
+    }
+
+    FileQuantitySizeCounter() { }
 
     qint32 num() const {
         return v_quantity;
@@ -191,12 +205,14 @@ public:
     }
 
     FileQuantitySizeCounter& operator+=(const File& file) {
+          std::unique_lock lock(mutex); // write lock
           v_quantity ++;
           v_size += file.size_bytes;
           return *this;
     }
 
     FileQuantitySizeCounter& operator+=(const QFile& file) {
+          std::unique_lock lock(mutex); // write lock
           v_quantity ++;
           v_size += file.size();
           return *this;
