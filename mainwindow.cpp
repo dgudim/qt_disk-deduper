@@ -289,8 +289,9 @@ void MainWindow::updateLoop2s() {
     averageDiskReadSpeed = averageDiskReadSpeed * 0.9 + ((disk_read - lastMeasuredDiskRead) / 2.0) * 0.1;
     lastMeasuredDiskRead = disk_read;
 
-    averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((processed_files.num() + preloaded_files.num() - previous_processed_files) / 2.0) * 0.1;
-    previous_processed_files = processed_files.num() + preloaded_files.num();
+    qint32 currently_processed_files = preprocessed_files.num() + processed_files.num() + preloaded_files.num();
+    averageFilesPerSecond = averageFilesPerSecond * 0.9 + ((currently_processed_files - previous_processed_files) / 2.0) * 0.1;
+    previous_processed_files = currently_processed_files;
 
     ui->disk_read_label->setText(QString("Disk read: %1/s").arg(FileUtils::bytesToReadable(averageDiskReadSpeed)));
     ui->items_per_sec_label->setText(QString("Items per sec: %1/s").arg(averageFilesPerSecond));
