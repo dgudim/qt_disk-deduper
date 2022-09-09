@@ -15,7 +15,6 @@
 #include <QDate>
 #include <QFile>
 #include <QDirIterator>
-#include <QtDebug>
 
 #include <QThread>
 
@@ -29,6 +28,8 @@
 #include <string>
 
 #include <QCryptographicHash>
+
+#include <QDebug>
 
 #pragma region File utils {
 

@@ -1,5 +1,6 @@
 #include "gutils.h"
 #include "phash.h"
+
 #include <QIcon>
 #include <QProcess>
 
@@ -67,7 +68,9 @@ bool FileUtils::deleteOrRenameFiles(QVector<File> &files_to_delete,
 
 QByteArray FileUtils::getFileHash(const QString& full_path) {
     QFile file = QFile(full_path);
-    if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error("Failed opening " + full_path.toStdString());
+    if (!file.open(QIODevice::ReadOnly)) {
+        qFatal("Failed opening %s", full_path.toLatin1().constData());
+    }
 
     QCryptographicHash hash(QCryptographicHash::Algorithm::Sha256);
     hash.addData(&file);
@@ -77,7 +80,10 @@ QByteArray FileUtils::getFileHash(const QString& full_path) {
 
 QByteArray FileUtils::getPartialFileHash(const QString &full_path) {
     QFile file = QFile(full_path);
-    if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error("Failed opening " + full_path.toStdString());
+    if (!file.open(QIODevice::ReadOnly)) {
+        qFatal("Failed opening %s", full_path.toLatin1().constData());
+    }
+
     file.seek(file.size() / 2);
     return QCryptographicHash::hash(file.read(1024), QCryptographicHash::Algorithm::Sha256);
 }
