@@ -696,7 +696,7 @@ bool MainWindow::startScanAsync() {
     return true;
 }
 
-void MainWindow::addEnumeratedFile(const QString& file, QVector<File>& files) {
+void MainWindow::addEnumeratedFile(const QString& file, MultiFile& files) {
     QFile file_r = file;
     if(files.size() % 100 == 0) {
         setCurrentTask(QString("Enumerating file: %1").arg(file));
@@ -705,7 +705,7 @@ void MainWindow::addEnumeratedFile(const QString& file, QVector<File>& files) {
     files.push_back({file});
 }
 
-void MainWindow::hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashType hash_type, const std::function<void(File&)>& callback) {
+void MainWindow::hashAllFiles(QSqlDatabase db, MultiFile& files, File::HashType hash_type, const std::function<void(File&)>& callback) {
     // threaded hash loading
     QVector<QFuture<void>> futures;
     for (auto& file: files) {
@@ -732,6 +732,12 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all,
         setCurrentTask(QString("Checking db data of file: %1").arg(file));
         if(!file.loadMetadataFromDb(db)) {
             files.append(file);
+        } else {
+            preprocessed_files += file;
+            processed_files += file;
+            if(!callback(file)) {
+                break;
+            }
         }
     }
 
@@ -749,18 +755,16 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all,
             }));
         }
     } else {
-        futures.append(QtConcurrent::run([&files, this]() {
-            for(int i = 0; i < files.size(); i++) {
-                setCurrentTask(QString("Getting info about file: %1").arg(files[i]));
-                files[i].loadMetadataFromExifTool(ex_tools[0]);
-                preprocessed_files += files[i];
-            }
-        }));
+        for(auto& file: files) {
+            setCurrentTask(QString("Getting info about file: %1").arg(file));
+            file.loadMetadataFromExifTool(ex_tools[0]);
+            preprocessed_files += file;
+        }
     }
 
     // save to db if the metadata was loaded
-    for(int i = 0; i < futures.size(); i++) {
-        futures[i].waitForFinished();
+    for(auto& future: futures) {
+        future.waitForFinished();
     }
 
     for(auto& file: files) {
@@ -773,7 +777,7 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all,
     }
 }
 
-void MainWindow::loadAllThumbnailsFromFiles(QSqlDatabase db, QVector<File>& files) {
+void MainWindow::loadAllThumbnailsFromFiles(QSqlDatabase db, MultiFile& files) {
     // threaded thumbnail genration
     QVector<QFuture<void>> futures;
     for (auto& file: files) {
@@ -956,7 +960,7 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
 
     QMap<QString, File> master_hashes;
     QSet<QString> master_hashes_hit;
-    QVector<File> dupes;
+    MultiFile dupes;
 
     for(auto& master_file: master_files) {
         master_hashes[master_file.hash] = master_file;
@@ -993,7 +997,7 @@ void MainWindow::exifRename(QSqlDatabase db) {
 
 void MainWindow::showStats(QSqlDatabase db) {
 
-    QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
+    QVector<NamedCountableQStringList> meta_fields_stats;
 
     for (auto& metadata_key: selectedMetaFields) {
         meta_fields_stats.append({metadata_key, {}});
@@ -1008,7 +1012,7 @@ void MainWindow::showStats(QSqlDatabase db) {
 
             // if value is already present (for instance extension "png") add to it, othrewise construct a new one
             if (metadata_array.contains(metadata_value)) {
-                Countable_qstring& temp = metadata_array[metadata_array.indexOf(metadata_value)];
+                CountableQString& temp = metadata_array[metadata_array.indexOf(metadata_value)];
                 temp.count ++;
                 temp.total_size_bytes += file.size_bytes;
             } else {

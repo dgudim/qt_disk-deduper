@@ -18,7 +18,7 @@ public:
 
 private:
 
-    void loadTable(const QStringList& headers, const QString& name, const QVector<Countable_qstring>& data);
+    void loadTable(const QStringList& headers, const QString& name, const CountableQStringList& fields);
 
     Ui::Stats_dialog *ui;
 };

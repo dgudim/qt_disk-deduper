@@ -16,7 +16,7 @@
 
 QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
 
-const QMap<QString, QVector<QPair<QString, std::function<void(QString&)>>>> metadataMap_name_to_fileds =
+const QMap<QString, NamedFunctionList<void(QString&)>> metadataMap_name_to_fileds =
 {
         {"Media type", {{"MIMEType", nullptr}}},
 
@@ -53,8 +53,8 @@ QMap<QString, QMap<QString, QString>> metaMaps;
 bool metaMapsLoaded = false;
 
 // procedurally generated
-QMap<QString, QPair<QString, std::function<void(QString&)>>> metadataMap_field_to_name;
-const QList<QString> metaFieldsList = metadataMap_name_to_fileds.keys();
+QMap<QString, NamedFunction<void(QString&)>> metadataMap_field_to_name;
+const QStringList metaFieldsList = metadataMap_name_to_fileds.keys();
 
 void File::updateMetadata(const QFile &qfile) {
 
@@ -276,7 +276,7 @@ void File::saveMetadataToDb(QSqlDatabase db) {
 
     QString columns;
     QString values;
-    QList<QString> metaFieldsForDb = metaFieldsList;
+    QStringList metaFieldsForDb = metaFieldsList;
     for(auto& meta_field: metaFieldsForDb) {
         meta_field.replace(" ", "_");
         columns += "," + meta_field;
@@ -366,6 +366,10 @@ QString FileQuantitySizeCounter::size_readable() const {
     return FileUtils::bytesToReadable(v_size);
 }
 
+QString CountableQString::size_readable() {
+    return FileUtils::bytesToReadable(total_size_bytes);
+}
+
 QList<QString> getMetaFieldsList() {
     return metaFieldsList;
 }
@@ -373,7 +377,7 @@ QList<QString> getMetaFieldsList() {
 ExifFormat::ExifFormat(const QString &format_string_raw, OnFailAction onFailAction, OnFileExistsAction onFileExistsAction)
     : onFailAction(onFailAction), onFileExistsAction(onFileExistsAction) {
 
-    QList<QString> metaFieldsList = getMetaFieldsList();
+    QStringList metaFieldsList = getMetaFieldsList();
 
     bool parenth_opened = false;
     int param_index = 1;

@@ -47,14 +47,30 @@ typedef QVector<pButtonGroups> ButtonGroupsPerTab;
 
 struct File;
 
-// stores files with the same hash
+// stores a list of files
 typedef QVector<File> MultiFile;
 
-// stores multiFiles with thre same fingerprint
+// stores a list of multiFiles
 typedef QVector<MultiFile> MultiFileGroup;
 
-// stores multiple MultiFileGroups
+// stores a list MultiFileGroups
 typedef QVector<MultiFileGroup> MultiFileGroupArray;
+
+struct CountableQString;
+
+//stores a list of qstrings
+typedef QVector<CountableQString> CountableQStringList;
+
+//stores a list of CountableQStrings and a qstring specifying the name
+typedef QPair<QString, CountableQStringList> NamedCountableQStringList;
+
+//stores an std::function with a name
+template<typename T>
+using NamedFunction = QPair<QString, std::function<T>>;
+
+//stores a list of named functions
+template<typename T>
+using NamedFunctionList = QVector<QPair<QString, std::function<T>>>;
 
 enum class MediaType {
     UNKNOWN,
@@ -77,19 +93,21 @@ enum class OnFileExistsAction {
 
 enum class LogLevel { DEBUG, INFO, WARNING, ERROR };
 
-struct Countable_qstring {
+struct CountableQString {
     QString string;
     quint32 count;
     double count_percentage;
     qint64 total_size_bytes;
     double size_percentage;
 
-    Countable_qstring(const QString& string) : string(string) {}
+    CountableQString(const QString& string) : string(string) {}
 
-    Countable_qstring (const QString& string, quint32 count, qint64 total_size_bytes, double count_percentage = 0, double size_percentage = 0)
+    CountableQString (const QString& string, quint32 count, qint64 total_size_bytes, double count_percentage = 0, double size_percentage = 0)
         : string(string), count(count), count_percentage(count_percentage), total_size_bytes(total_size_bytes), size_percentage(size_percentage) {};
 
-    bool operator==(const Countable_qstring &other) const{
+    QString size_readable();
+
+    bool operator==(const CountableQString &other) const{
         return string == other.string;
     }
 
@@ -252,11 +270,11 @@ struct StatsContainer {
 
     FileQuantitySizeCounter total_files;
 
-    QVector<QPair<QString, QVector<Countable_qstring>>> meta_fields_stats;
+    QVector<NamedCountableQStringList> meta_fields_stats;
 
     StatsContainer() {};
 
-    StatsContainer (const QVector<QPair<QString, QVector<Countable_qstring>>>& meta_fields_stats, const FileQuantitySizeCounter& total_files)
+    StatsContainer (const QVector<NamedCountableQStringList>& meta_fields_stats, const FileQuantitySizeCounter& total_files)
         : total_files(total_files), meta_fields_stats(meta_fields_stats) {}
 };
 

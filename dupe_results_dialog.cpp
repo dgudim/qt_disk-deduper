@@ -54,7 +54,7 @@ void Dupe_results_dialog::loadTab(const QString& name, const MultiFileGroup& lis
     QPushButton* applyButton = new QPushButton("Keep selected, delete the rest", tab_container);
 
     connect(applyButton, &QPushButton::clicked, tab_container, [button_groups, this](){
-        QVector<File> files_to_delete;
+        MultiFile files_to_delete;
         for(auto& button_group: *button_groups) {
             QList<QAbstractButton*> buttons = button_group->buttons();
             for (auto button: buttons){

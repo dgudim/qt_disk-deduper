@@ -122,13 +122,13 @@ private:
 
     void autoDedupe(QSqlDatabase db, bool safe);
 
-    void addEnumeratedFile(const QString& file, QVector<File>& files);
+    void addEnumeratedFile(const QString& file, MultiFile& files);
     void displayWarning(const QString &message);
 
     bool startScanAsync();
     void hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashType hash_type, const std::function<void (File &)> &callback = [](File&){});
-    void loadAllMetadataFromFiles(QSqlDatabase db, QVector<File>& files, const std::function<bool(File&)>& callback = [](File&){return true;});
-    void loadAllThumbnailsFromFiles(QSqlDatabase db, QVector<File> &files);
+    void loadAllMetadataFromFiles(QSqlDatabase db, MultiFile &files, const std::function<bool(File&)>& callback = [](File&){return true;});
+    void loadAllThumbnailsFromFiles(QSqlDatabase db, MultiFile &files);
 
     void setUiDisabled(bool state);
 
@@ -160,8 +160,8 @@ private:
     void startNewLog();
 
     // general variables
-    QVector<File> indexed_files;
-    QVector<File> master_files;
+    MultiFile indexed_files;
+    MultiFile master_files;
     QStringList directories_to_scan;
 
     QString masterFolder;

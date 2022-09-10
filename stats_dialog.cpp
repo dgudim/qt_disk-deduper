@@ -38,7 +38,7 @@ Stats_dialog::Stats_dialog(QWidget *parent, const StatsContainer& stats) : QDial
     }
 }
 
-void Stats_dialog::loadTable(const QStringList& headers, const QString& name, const QVector<Countable_qstring>& data) {
+void Stats_dialog::loadTable(const QStringList& headers, const QString& name, const CountableQStringList& fields) {
 
     // create new tab
     QWidget* tab_container = new QWidget();
@@ -59,7 +59,7 @@ void Stats_dialog::loadTable(const QStringList& headers, const QString& name, co
     }
     table->setHorizontalHeaderLabels(headers);
     int row = 0;
-    for(auto& ext: data) {
+    for(auto& ext: fields) {
         table->insertRow(row);
         table->setItem(row, 0, new QTableWidgetItem (ext.string));
         table->setItem(row, 1, new TableNumberItem (QString::number(ext.count)));
