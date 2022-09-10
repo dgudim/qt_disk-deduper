@@ -105,7 +105,7 @@ struct CountableQString {
     CountableQString (const QString& string, quint32 count, qint64 total_size_bytes, double count_percentage = 0, double size_percentage = 0)
         : string(string), count(count), count_percentage(count_percentage), total_size_bytes(total_size_bytes), size_percentage(size_percentage) {};
 
-    QString size_readable();
+    QString size_readable() const;
 
     bool operator==(const CountableQString &other) const{
         return string == other.string;

@@ -366,7 +366,7 @@ QString FileQuantitySizeCounter::size_readable() const {
     return FileUtils::bytesToReadable(v_size);
 }
 
-QString CountableQString::size_readable() {
+QString CountableQString::size_readable() const{
     return FileUtils::bytesToReadable(total_size_bytes);
 }
 

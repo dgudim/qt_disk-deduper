@@ -113,7 +113,6 @@ private:
     void saveList(const QString &key, QListWidget *list);
     void loadList(const QString &key, QListWidget *list);
 
-    QString callDirSelectionDialogue(const QString &title);
     QStringList callMultiDirSelectionDialogue();
     QString callTextDialogue(const QString &title, const QString &prompt);
 

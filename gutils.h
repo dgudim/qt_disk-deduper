@@ -65,6 +65,8 @@ namespace FileUtils {
 
     QPixmap generateThumbnail(const File& file, int size);
 
+    QString callDirSelectionDialogue(QWidget* parent, const QString &title);
+
 };
 
 QT_END_NAMESPACE

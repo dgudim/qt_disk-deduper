@@ -311,7 +311,7 @@ void MainWindow::onAddScanFolderClicked() {
 }
 
 void MainWindow::onSetMasterFolderClicked() {
-    QString temp = callDirSelectionDialogue("Choose master folder");
+    QString temp = FileUtils::callDirSelectionDialogue(this, "Choose master folder");
     if(!temp.isEmpty()) {
         masterFolder = temp;
         ui->master_folder_label->setText(QString("Master folder: %1").arg(masterFolder));
@@ -319,7 +319,7 @@ void MainWindow::onSetMasterFolderClicked() {
 }
 
 void MainWindow::onSetDupesFolderClicked() {
-    QString temp = callDirSelectionDialogue("Choose dupes folder");
+    QString temp = FileUtils::callDirSelectionDialogue(this, "Choose dupes folder");
     if(!temp.isEmpty()) {
         dupesFolder = temp;
         ui->dupes_folder_label->setText(QString("Dupes folder: %1").arg(dupesFolder));
@@ -559,10 +559,6 @@ QStringList MainWindow::callMultiDirSelectionDialogue() {
     } else {
         return {};
     }
-}
-
-QString MainWindow::callDirSelectionDialogue(const QString &title) {
-    return QFileDialog::getOpenFileName(this, title, "", "", nullptr, QFileDialog::Options(QFileDialog::ShowDirsOnly));
 }
 
 QString MainWindow::callTextDialogue(const QString &title, const QString &prompt) {

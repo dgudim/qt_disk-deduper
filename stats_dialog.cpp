@@ -26,9 +26,7 @@ Stats_dialog::Stats_dialog(QWidget *parent, const StatsContainer& stats) : QDial
 
     setWindowTitle("View statistics");
 
-    // open main window on dialogue close
-    connect(ui->discard_button, SIGNAL(clicked()), this, SLOT(reject()));
-    connect(ui->save_button, SIGNAL(clicked()), this, SLOT(accept()));
+    UiUtils::connectDialogButtonBox(this, ui->buttonBox);
 
     ui->total_files_label->setText(QString("Total files: %1").arg(stats.total_files.num()));
     ui->total_size_label->setText(QString("Total size: %1").arg(stats.total_files.size_readable()));
@@ -64,7 +62,7 @@ void Stats_dialog::loadTable(const QStringList& headers, const QString& name, co
         table->setItem(row, 0, new QTableWidgetItem (ext.string));
         table->setItem(row, 1, new TableNumberItem (QString::number(ext.count)));
         table->setItem(row, 2, new TableNumberItem (QString("%1%").arg(ext.count_percentage)));
-        table->setItem(row, 3, new TableNumberItem (FileUtils::bytesToReadable(ext.total_size_bytes)));
+        table->setItem(row, 3, new TableNumberItem (ext.size_readable()));
         table->setItem(row, 4, new TableNumberItem (QString("%1%").arg(ext.size_percentage)));
         row ++;
     }
@@ -72,7 +70,6 @@ void Stats_dialog::loadTable(const QStringList& headers, const QString& name, co
     table->setSortingEnabled(true);
     table->setAlternatingRowColors(true);
 }
-
 
 Stats_dialog::~Stats_dialog() {
     delete ui;

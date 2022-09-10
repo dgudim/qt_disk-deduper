@@ -1,6 +1,7 @@
 #include "gutils.h"
 #include "phash.h"
 
+#include <QFileDialog>
 #include <QIcon>
 #include <QProcess>
 
@@ -246,6 +247,10 @@ QString FileUtils::bytesToReadable(quint64 b) {
 quint64 FileUtils::readableToBytes(const QString &str) {
     QStringList split = str.split(" ");
     return split[0].toDouble() * size_multipliers[split[1]];
+}
+
+QString FileUtils::callDirSelectionDialogue(QWidget* parent, const QString &title) {
+    return QFileDialog::getOpenFileName(parent, title, "", "", nullptr, QFileDialog::Options(QFileDialog::ShowDirsOnly));
 }
 
 #pragma endregion}
