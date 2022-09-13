@@ -56,13 +56,14 @@ public:
     void hashCompare(QSqlDatabase db);
     void phashCompare(QSqlDatabase db);
     void nameCompare(QSqlDatabase db);
-    void autoDedupeMove(QSqlDatabase db);
-    void autoDedupeRename(QSqlDatabase db);
+    void autoDedupe_move(QSqlDatabase db);
+    void autoDedupe_rename(QSqlDatabase db);
     void exifRename(QSqlDatabase);
     void showStats(QSqlDatabase db);
 
     void fileCompare_display();
     void showStats_display();
+    void autoDedupe_display();
 
     QString showStats_request();
     QString autoDedupe_request();
@@ -177,6 +178,7 @@ private:
 
     // dedupe results
     MultiFileGroupArray dedupe_resuts;
+    PairList<File, QString> autoDedupe_files;
 
     // exif rename format container
     ExifFormat exifRenameFormat;

@@ -46,9 +46,16 @@ namespace FileUtils {
     void walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
                  ExtenstionFilterState extFilterState, std::function<void(const QString&)> callback);
 
-    bool deleteOrRenameFiles(QVector<File>& files_to_delete,
-                             const std::function<void (const QString &)> &status_callback,
-                             bool rename = false, const QString &target_dir = "", const QString &postfix = "");
+    PairList<File, QString> queueFilesToModify(QVector<File> &files_to_delete,
+                                               const QString& target_dir, const QString& postfix);
+
+    bool deleteOrRenameFiles(PairList<File, QString> &files_to_delete,
+                             const std::function<void(const QString&)> &status_callback,
+                             bool rename);
+
+    bool deleteOrRenameFiles(MultiFile &files_to_delete,
+                             const std::function<void(const QString&)> &status_callback,
+                             bool rename = false, const QString& target_dir = "", const QString& postfix = "");
 
     QByteArray getFileHash(const QString& full_path);
     QByteArray getPartialFileHash(const QString& full_path);

@@ -8,6 +8,7 @@
 #include "dupe_results_dialog.h"
 #include "exif_rename_builder_dialog.h"
 #include "dynamic_selection_dialog.h"
+#include "move_confirmation_dialog.h"
 
 enum PiechartIndex {
     ALL_FILES = 0,
@@ -39,19 +40,19 @@ enum ScanMode {
 struct ScanModeProperties {
     QString name;
     QString description;
+    std::function<QString(MainWindow*)> request_function;
     std::function<void(MainWindow*, QSqlDatabase)> process_function;
     std::function<void(MainWindow*)> display_function;
-    std::function<QString(MainWindow*)> request_function;
 };
 
 QList<ScanModeProperties> scan_modes = {
-    {"Hash duplicates", "Compare files by hash and show results in groups for further action", &MainWindow::hashCompare, &MainWindow::fileCompare_display, nullptr},
-    {"Find similar files", "Compare files by perceptual hash and show results in groups for further action", &MainWindow::phashCompare, &MainWindow::fileCompare_display, nullptr},
-    {"Name duplicates", "Compare files by name and show results in groups for further action", &MainWindow::nameCompare, &MainWindow::fileCompare_display, nullptr},
-    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupeMove, &MainWindow::autoDedupe_request, nullptr},
-    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupeRename, &MainWindow::autoDedupe_request, nullptr},
-    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename, nullptr, &MainWindow::exifRename_request},
-    {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them", &MainWindow::showStats, &MainWindow::showStats_display, &MainWindow::showStats_request}};
+    {"Hash duplicates", "Compare files by hash and show results in groups for further action", nullptr, &MainWindow::hashCompare, &MainWindow::fileCompare_display},
+    {"Find similar files", "Compare files by perceptual hash and show results in groups for further action", nullptr, &MainWindow::phashCompare, &MainWindow::fileCompare_display},
+    {"Name duplicates", "Compare files by name and show results in groups for further action", nullptr, &MainWindow::nameCompare, &MainWindow::fileCompare_display},
+    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupe_request, &MainWindow::autoDedupe_move, &MainWindow::autoDedupe_display},
+    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupe_request, &MainWindow::autoDedupe_rename, &MainWindow::autoDedupe_display},
+    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename_request, &MainWindow::exifRename, nullptr},
+    {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them", &MainWindow::showStats_request, &MainWindow::showStats, &MainWindow::showStats_display}};
 
 QList<QPair<QString, QList<QString>>> extension_bundles = {
     {"image", {"jpg", "jpeg", "jpe", "jif", "jfif", "jfi", "png", "gif", "webp", "tiff", "tif", "heif", "heic", "raw", "arw", "cr", "cr2", "rw2", "nrw", "k25", "svg" }},
@@ -939,11 +940,11 @@ void MainWindow::nameCompare(QSqlDatabase db) {
     findDuplicateFiles<FileField::NAME>(db);
 }
 
-void MainWindow::autoDedupeMove(QSqlDatabase db) {
+void MainWindow::autoDedupe_move(QSqlDatabase db) {
     autoDedupe(db, false);
 }
 
-void MainWindow::autoDedupeRename(QSqlDatabase db) {
+void MainWindow::autoDedupe_rename(QSqlDatabase db) {
     autoDedupe(db, true);
 }
 
@@ -976,11 +977,7 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
         }
     });
 
-    FileUtils::deleteOrRenameFiles(dupes,
-    [this](const QString& status) {
-        setCurrentTask(status);
-        qInfo() << status;
-    }, true, safe ? "" : dupesFolder, safe ? "_DELETED_" : "");
+    autoDedupe_files = FileUtils::queueFilesToModify(dupes, safe ? "" : dupesFolder, safe ? "_DELETED_" : "");
 }
 
 void MainWindow::exifRename(QSqlDatabase db) {
@@ -1080,6 +1077,20 @@ QString MainWindow::autoDedupe_request() {
         return "Duplicate folder doesn't exist, can't proceed";
     }
     return "";
+}
+
+void MainWindow::autoDedupe_display() {
+
+    MoveConfirmationDialog confirmation_dialog(this, autoDedupe_files);
+
+    confirmation_dialog.setModal(true);
+    if(confirmation_dialog.exec() == QDialog::Accepted) {
+        FileUtils::deleteOrRenameFiles(autoDedupe_files,
+        [this](const QString& status) {
+            setCurrentTask(status);
+            qInfo() << status;
+        }, true);
+    };
 }
 
 void MainWindow::showStats_display() {

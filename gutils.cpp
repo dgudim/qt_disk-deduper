@@ -39,11 +39,9 @@ void FileUtils::walkDir(const QString& dir, const QStringList& blacklisted_dirs,
     }
 }
 
-bool FileUtils::deleteOrRenameFiles(QVector<File> &files_to_delete,
-                                    const std::function<void(const QString&)> &status_callback,
-                                    bool rename, const QString& target_dir, const QString& postfix) {
-    bool success = true;
-    QString stat_msg = rename ? "renaming" : "deleting";
+PairList<File, QString> FileUtils::queueFilesToModify(MultiFile &files_to_delete,
+                                              const QString& target_dir, const QString& postfix) {
+    PairList<File, QString> list;
 
     for(auto& file: files_to_delete) {
         if(file.valid) {
@@ -53,8 +51,33 @@ bool FileUtils::deleteOrRenameFiles(QVector<File> &files_to_delete,
 
             QString resulting_path = dir.filePath(file.name + postfix);
 
+            list.append({file, resulting_path});
+        }
+    }
+
+    return list;
+}
+
+bool FileUtils::deleteOrRenameFiles(MultiFile &files_to_delete,
+                                    const std::function<void(const QString&)> &status_callback,
+                                    bool rename, const QString& target_dir, const QString& postfix) {
+    PairList<File, QString> files = queueFilesToModify(files_to_delete, target_dir, postfix);
+    // TODO: fix this, unnecessary memory allocation
+    return deleteOrRenameFiles(files, status_callback, rename);
+}
+
+bool FileUtils::deleteOrRenameFiles(PairList<File, QString> &files_to_delete,
+                                    const std::function<void(const QString&)> &status_callback,
+                                    bool rename) {
+    bool success = true;
+    QString stat_msg = rename ? "renaming" : "deleting";
+
+    for(auto& [file, resulting_path]: files_to_delete) {
+        if(file.valid) {
+            QFile file_real (file);
+
             status_callback(QString("Status: %1 %2 to %3").arg(stat_msg, file, resulting_path));
-            if (!(rename ? file_real.rename(dir.filePath(file.name + postfix)) : file_real.remove())) {
+            if (!(rename ? file_real.rename(resulting_path) : file_real.remove())) {
                 status_callback(QString("Status: error %1 %2 to %3)").arg(stat_msg, file, resulting_path));
                 qCritical() << "Error " + stat_msg << file << "to" << resulting_path;
                 success = false;

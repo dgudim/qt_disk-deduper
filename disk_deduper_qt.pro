@@ -20,6 +20,7 @@ SOURCES += \
     gutils.cpp \
     main.cpp \
     mainwindow.cpp \
+    move_confirmation_dialog.cpp \
     stats_dialog.cpp \
     ExifTool.cpp \
     ExifToolPipe.cpp \
@@ -37,6 +38,7 @@ HEADERS += \
     gutils.h \
     mainwindow.h \
     meta_converters.h \
+    move_confirmation_dialog.h \
     stats_dialog.h \
     ExifTool.h \
     ExifToolPipe.h \
@@ -50,6 +52,7 @@ FORMS += \
     exif_rename_builder_dialog.ui \
     folder_list_item.ui \
     mainwindow.ui \
+    move_confirmation_dialog.ui \
     stats_dialog.ui
 
 # Default rules for deployment.

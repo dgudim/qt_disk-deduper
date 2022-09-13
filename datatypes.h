@@ -72,6 +72,10 @@ using NamedFunction = QPair<QString, std::function<T>>;
 template<typename T>
 using NamedFunctionList = QVector<QPair<QString, std::function<T>>>;
 
+//stores a list of pairs
+template<typename T1, typename T2>
+using PairList = QVector<QPair<T1, T2>>;
+
 enum class MediaType {
     UNKNOWN,
     IMAGE,
