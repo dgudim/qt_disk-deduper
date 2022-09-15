@@ -12,6 +12,7 @@ QMAKE_CXXFLAGS_WARN_ON += -Wno-unknown-pragmas -Wunused-parameter -Wunused-funct
 
 SOURCES += \
     clickableQLabel.cpp \
+    constants.cpp \
     datatypes.cpp \
     deletion_confirmation_dialog.cpp \
     dupe_results_dialog.cpp \
@@ -29,6 +30,7 @@ SOURCES += \
 
 HEADERS += \
     clickableQLabel.h \
+    constants.h \
     datatypes.h \
     deletion_confirmation_dialog.h \
     dupe_results_dialog.h \

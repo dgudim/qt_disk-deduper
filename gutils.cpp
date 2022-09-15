@@ -7,7 +7,7 @@
 
 #pragma region File utils {
 
-QMap<QString, quint64> size_multipliers = {{"b", 1}, {"Kb", 1024}, {"Mb", 1048576}, {"Gb", 1073741824}};
+const QMap<QString, quint64> size_multipliers = {{"b", 1}, {"Kb", 1024}, {"Mb", 1048576}, {"Gb", 1073741824}};
 
 void FileUtils::walkDir(const QString& dir, const QStringList& blacklisted_dirs, const QStringList& extensions,
              ExtenstionFilterState extFilterState, std::function<void(const QString&)> callback) {
@@ -62,7 +62,6 @@ bool FileUtils::deleteOrRenameFiles(MultiFile &files_to_delete,
                                     const std::function<void(const QString&)> &status_callback,
                                     bool rename, const QString& target_dir, const QString& postfix) {
     PairList<File, QString> files = queueFilesToModify(files_to_delete, target_dir, postfix);
-    // TODO: fix this, unnecessary memory allocation
     return deleteOrRenameFiles(files, status_callback, rename);
 }
 

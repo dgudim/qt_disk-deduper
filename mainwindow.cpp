@@ -10,6 +10,8 @@
 #include "dynamic_selection_dialog.h"
 #include "move_confirmation_dialog.h"
 
+#include <constants.h>
+
 enum PiechartIndex {
     ALL_FILES = 0,
     PREPROCESSSED_FILES = 1,
@@ -46,13 +48,29 @@ struct ScanModeProperties {
 };
 
 QList<ScanModeProperties> scan_modes = {
-    {"Hash duplicates", "Compare files by hash and show results in groups for further action", nullptr, &MainWindow::hashCompare, &MainWindow::fileCompare_display},
-    {"Find similar files", "Compare files by perceptual hash and show results in groups for further action", nullptr, &MainWindow::phashCompare, &MainWindow::fileCompare_display},
-    {"Name duplicates", "Compare files by name and show results in groups for further action", nullptr, &MainWindow::nameCompare, &MainWindow::fileCompare_display},
-    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)", &MainWindow::autoDedupe_request, &MainWindow::autoDedupe_move, &MainWindow::autoDedupe_display},
-    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)", &MainWindow::autoDedupe_request, &MainWindow::autoDedupe_rename, &MainWindow::autoDedupe_display},
-    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)", &MainWindow::exifRename_request, &MainWindow::exifRename, nullptr},
-    {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them", &MainWindow::showStats_request, &MainWindow::showStats, &MainWindow::showStats_display}};
+
+    {"Hash duplicates", "Compare files by hash and show results in groups for further action",
+     nullptr, &MainWindow::hashCompare, &MainWindow::fileCompare_display},
+
+    {"Find similar files", "Compare files by perceptual hash and show results in groups for further action",
+     nullptr, &MainWindow::phashCompare, &MainWindow::fileCompare_display},
+
+    {"Name duplicates", "Compare files by name and show results in groups for further action",
+     nullptr, &MainWindow::nameCompare, &MainWindow::fileCompare_display},
+
+    {"Auto dedupe(move)", "Compare master folder and slave folders by hash (Files from the slave folders are moved into the dupes folder if they are present in the master folder)",
+     &MainWindow::autoDedupe_request, &MainWindow::autoDedupe_move, &MainWindow::autoDedupe_display},
+
+    {"Auto dedupe(rename)", "Compare master folder and slave folders by hash (DELETED_ is added to the name of a file from the slave folders if it is present in the master folder)",
+     &MainWindow::autoDedupe_request, &MainWindow::autoDedupe_rename, &MainWindow::autoDedupe_display},
+
+    {"EXIF rename", "Rename files according to their EXIF data (Name format: <creation date and time>_<camera model>_numbers from file name)",
+     &MainWindow::exifRename_request, &MainWindow::exifRename, nullptr},
+
+    {"Show statistics", "Get statistics of selected folders (Extensions, camera models) and display them",
+     &MainWindow::showStats_request, &MainWindow::showStats, &MainWindow::showStats_display}
+
+};
 
 QList<QPair<QString, QList<QString>>> extension_bundles = {
     {"image", {"jpg", "jpeg", "jpe", "jif", "jfif", "jfi", "png", "gif", "webp", "tiff", "tif", "heif", "heic", "raw", "arw", "cr", "cr2", "rw2", "nrw", "k25", "svg" }},
@@ -997,7 +1015,7 @@ void MainWindow::showStats(QSqlDatabase db) {
         meta_fields_stats.append({metadata_key, {}});
     }
 
-    loadAllMetadataFromFiles(db, "%Y:%m:%d %H:%M:%S", indexed_files,
+    loadAllMetadataFromFiles(db, Constants::datetime_format, indexed_files,
     [&meta_fields_stats](const File& file){
 
         // iterate through name-array pairs

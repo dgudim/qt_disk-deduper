@@ -12,39 +12,40 @@
 #include <QPainter>
 #include <QMimeType>
 
+#include <constants.h>
+
 #include <QtConcurrent/QtConcurrent>
 
-QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
+const QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
 
-const QMap<QString, NamedFunctionList<void(QString&, QString)>> metadataMap_name_to_fileds =
+const QMap<QString, QPair<QStringList, std::function<void(QString&, QString)>>> metadataMap_name_to_fields =
 {
-        {"Media type", {{"MIMEType", nullptr}}},
+        {"Media type", {{"MIMEType"}, nullptr}},
 
-        {"Creation date", {{"MediaCreateDate", creationDateConverter},
-                           {"ContentCreateDate", creationDateConverter},
-                           {"ContentCreateDate", creationDateConverter},
-                           {"DateTimeOriginal", creationDateConverter},
-                           {"FileModifyDate", creationDateConverter}}},
+        {"Creation date", {{"MediaCreateDate",
+                           "ContentCreateDate",
+                           "DateTimeOriginal",
+                           "FileModifyDate"}, creationDateConverter}},
 
-        {"Camera model", {{"Model", nullptr},
-                          {"CameraModelName", nullptr}}},
+        {"Camera model", {{"Model",
+                          "CameraModelName"}, nullptr}},
 
-        {"Camera manufacturer", {{"Make", nullptr}}},
+        {"Camera manufacturer", {{"Make"}, nullptr}},
 
-        {"Width", {{"ImageWidth", nullptr},
-                   {"ExifImageWidth", nullptr}}},
+        {"Width", {{"ImageWidth",
+                   "ExifImageWidth"}, nullptr}},
 
-        {"Height", {{"ImageHeight", nullptr},
-                    {"ExifImageWidth", nullptr}}},
+        {"Height", {{"ImageHeight",
+                    "ExifImageHeight"}, nullptr}},
 
-        {"Artist", {{"Artist", nullptr}}},
-        {"Title", {{"Title", nullptr}}},
-        {"Album", {{"Album", nullptr}}},
-        {"Genre", {{"Genre", nullptr}}},
+        {"Artist", {{"Artist"}, nullptr}},
+        {"Title", {{"Title"}, nullptr}},
+        {"Album", {{"Album"}, nullptr}},
+        {"Genre", {{"Genre"}, nullptr}},
 
-        {"Duration", {{"MediaDuration", durationConverter},
-                      {"Duration", durationConverter},
-                      {"Track Duration", durationConverter}}},
+        {"Duration", {{"MediaDuration",
+                      "Duration",
+                      "Track Duration"}, durationConverter}}
 };
 
 // user-defined maps to remap any xmp value
@@ -53,8 +54,8 @@ QMap<QString, QMap<QString, QString>> metaMaps;
 bool metaMapsLoaded = false;
 
 // procedurally generated
-QMap<QString, NamedFunction<void(QString&, QString)>> metadataMap_field_to_name;
-const QStringList metaFieldsList = metadataMap_name_to_fileds.keys();
+QStringList needed_exif_fields;
+const QStringList metaFieldsList = metadataMap_name_to_fields.keys();
 
 void File::updateMetadata(const QFile &qfile) {
 
@@ -89,7 +90,7 @@ void File::loadStatisMetaMaps() {
         QFileInfoList config_files = QDir("./config").entryInfoList(QDir::Filter::Files);
         for(auto& config_file: config_files) {
             QString fileName = config_file.fileName();
-            if(!metadataMap_name_to_fileds.contains(fileName)) {
+            if(!metadataMap_name_to_fields.contains(fileName)) {
                 qWarning() << "Unknown config file:" << fileName;
             } else {
                 QFile file(config_file.absoluteFilePath());
@@ -116,11 +117,15 @@ void File::loadStatisMetaMaps() {
     }
 
     // construct lookup table if it doesn't exist
-    if (metadataMap_field_to_name.isEmpty()) {
-        qDebug() << "metadataMap_field_to_name constructed";
+    if (needed_exif_fields.isEmpty()) {
+        qDebug() << "needed_exif_fields constructed";
         for (auto& key: metaFieldsList) {
-            for (auto& meta_field_and_converter: metadataMap_name_to_fileds[key]){
-                metadataMap_field_to_name.insert(meta_field_and_converter.first, {key, meta_field_and_converter.second});
+            for (auto& exif_field: metadataMap_name_to_fields[key].first) {
+                if(!needed_exif_fields.contains(exif_field)) {
+                    needed_exif_fields.append(exif_field);
+                } else {
+                    qWarning() << "Duplicate exif field for metadata field: " << exif_field;
+                }
             }
         }
     }
@@ -131,12 +136,12 @@ void File::loadMetadataFromExifTool(ExifTool* ex_tool, const QString& datetime_f
     // get known values
     QMap<QString, QString> gathered_values;
 
-    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), "-d\n%Y:%m:%d %H:%M:%S");
+    TagInfo *info = ex_tool->ImageInfo(full_path.toStdString().c_str(), Constants::datetime_format_exiftool);
     if (info) {
         for (TagInfo *i = info; i; i = i->next) {
             QString name = QString::fromUtf8(i->name);
             QString value = QString::fromUtf8(i->value);
-            if(metadataMap_field_to_name.contains(name) && !empty_values.contains(value)) {
+            if(needed_exif_fields.contains(name) && !empty_values.contains(value)) {
                 gathered_values.insert(name, value);
             }
         }
@@ -146,19 +151,19 @@ void File::loadMetadataFromExifTool(ExifTool* ex_tool, const QString& datetime_f
     }
 
     for(auto& out_field: metaFieldsList) {
-        // iterate thrugh all suitable fields
-        for(auto& meta_field_and_converter: metadataMap_name_to_fileds[out_field]) {
+        // iterate through all suitable fields
+        for(auto& exif_field: metadataMap_name_to_fields[out_field].first) {
             // check if if was returned by exiftool and is not considered empty
-            if(gathered_values.contains(meta_field_and_converter.first)) {
+            if(gathered_values.contains(exif_field)) {
 
-                QString value = gathered_values[meta_field_and_converter.first].trimmed();
+                QString value = gathered_values[exif_field].trimmed();
                 // use converter if provided
-                if(meta_field_and_converter.second) {
+                if(metadataMap_name_to_fields[out_field].second) {
                     QString parameter;
                     if(out_field == "Creation date") {
                         parameter = datetime_format;
                     }
-                    meta_field_and_converter.second(value, parameter);
+                    metadataMap_name_to_fields[out_field].second(value, parameter);
                 }
                 metadata.insert(out_field, remapMetaValue(out_field, value));
             }

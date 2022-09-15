@@ -5,6 +5,8 @@
 
 #include <QSettings>
 
+#include <constants.h>
+
 QSettings exif_settings(QSettings::UserScope, "disk_deduper_qt", "exif_ui_state");
 
 Exif_rename_builder_dialog::Exif_rename_builder_dialog(QWidget *parent) :
@@ -34,7 +36,7 @@ Exif_rename_builder_dialog::Exif_rename_builder_dialog(QWidget *parent) :
     UiUtils::connectDialogButtonBox(this, ui->buttonBox);
 
     ui->input->setText(exif_settings.value("template", "[Camera manufacturer]_[Camera model]_[Creation date]").toString());
-    ui->datetime_format_edit->setText(exif_settings.value("datetime_format", "%Y:%m:%d %H:%M:%S").toString());
+    ui->datetime_format_edit->setText(exif_settings.value("datetime_format", Constants::datetime_format).toString());
     validateTemplate(ui->input->text());
 
     ui->if_metadata_not_available_selector->addItem("Do nothing");
