@@ -16,15 +16,15 @@
 
 QVector<QString> empty_values = {"", "-", "--", "0000:00:00 00:00:00", "0000:00:00", "00:00:00"};
 
-const QMap<QString, NamedFunctionList<void(QString&)>> metadataMap_name_to_fileds =
+const QMap<QString, NamedFunctionList<void(QString&, QString)>> metadataMap_name_to_fileds =
 {
         {"Media type", {{"MIMEType", nullptr}}},
 
-        {"Creation date", {{"MediaCreateDate", nullptr},
-                           {"ContentCreateDate", nullptr},
-                           {"ContentCreateDate", nullptr},
-                           {"DateTimeOriginal", nullptr},
-                           {"FileModifyDate", nullptr}}},
+        {"Creation date", {{"MediaCreateDate", creationDateConverter},
+                           {"ContentCreateDate", creationDateConverter},
+                           {"ContentCreateDate", creationDateConverter},
+                           {"DateTimeOriginal", creationDateConverter},
+                           {"FileModifyDate", creationDateConverter}}},
 
         {"Camera model", {{"Model", nullptr},
                           {"CameraModelName", nullptr}}},
@@ -53,7 +53,7 @@ QMap<QString, QMap<QString, QString>> metaMaps;
 bool metaMapsLoaded = false;
 
 // procedurally generated
-QMap<QString, NamedFunction<void(QString&)>> metadataMap_field_to_name;
+QMap<QString, NamedFunction<void(QString&, QString)>> metadataMap_field_to_name;
 const QStringList metaFieldsList = metadataMap_name_to_fileds.keys();
 
 void File::updateMetadata(const QFile &qfile) {
@@ -126,7 +126,7 @@ void File::loadStatisMetaMaps() {
     }
 }
 
-void File::loadMetadataFromExifTool(ExifTool* ex_tool) {
+void File::loadMetadataFromExifTool(ExifTool* ex_tool, const QString& datetime_format) {
 
     // get known values
     QMap<QString, QString> gathered_values;
@@ -154,7 +154,11 @@ void File::loadMetadataFromExifTool(ExifTool* ex_tool) {
                 QString value = gathered_values[meta_field_and_converter.first].trimmed();
                 // use converter if provided
                 if(meta_field_and_converter.second) {
-                    meta_field_and_converter.second(value);
+                    QString parameter;
+                    if(out_field == "Creation date") {
+                        parameter = datetime_format;
+                    }
+                    meta_field_and_converter.second(value, parameter);
                 }
                 metadata.insert(out_field, remapMetaValue(out_field, value));
             }
@@ -374,8 +378,8 @@ QList<QString> getMetaFieldsList() {
     return metaFieldsList;
 }
 
-ExifFormat::ExifFormat(const QString &format_string_raw, OnFailAction onFailAction, OnFileExistsAction onFileExistsAction)
-    : onFailAction(onFailAction), onFileExistsAction(onFileExistsAction) {
+ExifFormat::ExifFormat(const QString &format_string_raw, const QString& datetime_format, OnFailAction onFailAction, OnFileExistsAction onFileExistsAction)
+    : datetime_format(datetime_format), onFailAction(onFailAction), onFileExistsAction(onFileExistsAction) {
 
     QStringList metaFieldsList = getMetaFieldsList();
 

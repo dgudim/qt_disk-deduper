@@ -26,9 +26,15 @@ Exif_rename_builder_dialog::Exif_rename_builder_dialog(QWidget *parent) :
          }
     });
 
+    connect(ui->availbale_metaFields, &QListWidget::itemDoubleClicked, this,
+    [this](QListWidgetItem* item){
+         ui->input->setText(ui->input->text() + "[" + item->text() + "]");
+    });
+
     UiUtils::connectDialogButtonBox(this, ui->buttonBox);
 
     ui->input->setText(exif_settings.value("template", "[Camera manufacturer]_[Camera model]_[Creation date]").toString());
+    ui->datetime_format_edit->setText(exif_settings.value("datetime_format", "%Y:%m:%d %H:%M:%S").toString());
     validateTemplate(ui->input->text());
 
     ui->if_metadata_not_available_selector->addItem("Do nothing");
@@ -93,12 +99,13 @@ Exif_rename_builder_dialog::~Exif_rename_builder_dialog() {
     exif_settings.setValue("on_file_exists", ui->if_file_exists_selector->currentIndex());
     exif_settings.setValue("on_fail", ui->if_metadata_not_available_selector->currentIndex());
     exif_settings.setValue("template", ui->input->text());
+    exif_settings.setValue("datetime_format", ui->datetime_format_edit->text());
 
     delete ui;
 }
 
 ExifFormat Exif_rename_builder_dialog::getFormat() {
-    return ExifFormat(ui->input->text(),
+    return ExifFormat(ui->input->text(), ui->datetime_format_edit->text(),
                       (OnFailAction)ui->if_metadata_not_available_selector->currentIndex(),
                       (OnFileExistsAction)ui->if_file_exists_selector->currentIndex());
 }

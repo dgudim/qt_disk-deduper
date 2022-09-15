@@ -127,7 +127,8 @@ private:
 
     bool startScanAsync();
     void hashAllFiles(QSqlDatabase db, QVector<File>& files, File::HashType hash_type, const std::function<void (File &)> &callback = [](File&){});
-    void loadAllMetadataFromFiles(QSqlDatabase db, MultiFile &files, const std::function<bool(File&)>& callback = [](File&){return true;});
+    void loadAllMetadataFromFiles(QSqlDatabase db, const QString& datetime_format,
+                                  MultiFile &files, const std::function<bool(File&)>& callback = [](File&){return true;});
     void loadAllThumbnailsFromFiles(QSqlDatabase db, MultiFile &files);
 
     void setUiDisabled(bool state);

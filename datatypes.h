@@ -156,7 +156,7 @@ struct File {
     static void loadStatisMetaMaps();
 
     bool loadMetadataFromDb(QSqlDatabase db);
-    void loadMetadataFromExifTool(ExifTool* ex_tool);
+    void loadMetadataFromExifTool(ExifTool* ex_tool, const QString& datetime_format);
     QFuture<void> loadHash(QSqlDatabase db, HashType hash_type);
     QFuture<void> loadThumbnail(QSqlDatabase db);
     void postLoadThumbnail();
@@ -254,6 +254,7 @@ public:
 struct ExifFormat {
 
     QString format_string;
+    QString datetime_format;
     QVector<QString> metaFieldKeys;
     OnFailAction onFailAction;
     OnFileExistsAction onFileExistsAction;
@@ -261,7 +262,7 @@ struct ExifFormat {
 
     ExifFormat (){}
 
-    ExifFormat(const QString& format_string_raw, OnFailAction onFailAction, OnFileExistsAction onFileExistsAction);
+    ExifFormat(const QString& format_string_raw, const QString& datetime_format, OnFailAction onFailAction, OnFileExistsAction onFileExistsAction);
 
     bool isValid() {
         return valid;

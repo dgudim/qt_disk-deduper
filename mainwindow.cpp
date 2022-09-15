@@ -721,7 +721,8 @@ void MainWindow::hashAllFiles(QSqlDatabase db, MultiFile& files, File::HashType 
     }
 }
 
-void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all, const std::function<bool (File &)> &callback) {
+void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, const QString& datetime_format,
+                                          MultiFile& files_all, const std::function<bool (File &)> &callback) {
 
     MultiFile files;
     for(auto& file: files_all) {
@@ -743,10 +744,10 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all,
     QVector<QFuture<void>> futures;
     if(files.size() / idealThreadCount > 100) {
         for(int offset = 0; offset < ex_tools.size(); offset++) {
-            futures.append(QtConcurrent::run([&files, this, offset]() {
+            futures.append(QtConcurrent::run([&files, this, offset, &datetime_format]() {
                 for(int i = offset; i < files.size(); i+= idealThreadCount) {
                     setCurrentTask(QString("Getting info about file: %1").arg(files[i]));
-                    files[i].loadMetadataFromExifTool(ex_tools[offset]);
+                    files[i].loadMetadataFromExifTool(ex_tools[offset], datetime_format);
                     preprocessed_files += files[i];
                 }
             }));
@@ -754,7 +755,7 @@ void MainWindow::loadAllMetadataFromFiles(QSqlDatabase db, MultiFile& files_all,
     } else {
         for(auto& file: files) {
             setCurrentTask(QString("Getting info about file: %1").arg(file));
-            file.loadMetadataFromExifTool(ex_tools[0]);
+            file.loadMetadataFromExifTool(ex_tools[0], datetime_format);
             preprocessed_files += file;
         }
     }
@@ -981,7 +982,7 @@ void MainWindow::autoDedupe(QSqlDatabase db, bool safe) {
 }
 
 void MainWindow::exifRename(QSqlDatabase db) {
-    loadAllMetadataFromFiles(db, indexed_files,
+    loadAllMetadataFromFiles(db, exifRenameFormat.datetime_format, indexed_files,
     [this](File& file){
         setCurrentTask(QString("Renaming file: %1").arg(file));
         return exifRenameFormat.rename(file);
@@ -996,7 +997,7 @@ void MainWindow::showStats(QSqlDatabase db) {
         meta_fields_stats.append({metadata_key, {}});
     }
 
-    loadAllMetadataFromFiles(db, indexed_files,
+    loadAllMetadataFromFiles(db, "%Y:%m:%d %H:%M:%S", indexed_files,
     [&meta_fields_stats](const File& file){
 
         // iterate through name-array pairs
