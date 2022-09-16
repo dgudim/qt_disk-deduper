@@ -1,7 +1,7 @@
 #ifndef DELETION_CONFIRMATION_DIALOG_H
 #define DELETION_CONFIRMATION_DIALOG_H
 
-#include "datatypes.h"
+#include <datatypes.h>
 #include <QDialog>
 
 namespace Ui {
