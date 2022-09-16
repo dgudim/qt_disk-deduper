@@ -13,8 +13,10 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt5 REQUIRED COMPONENTS Widgets Charts Concurrent Sql)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Charts Concurrent Sql)
+set(QT_COMPONENTS Widgets Charts Concurrent Sql)
+
+find_package(QT NAMES Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS ${QT_COMPONENTS})
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" )
 file(GLOB_RECURSE HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
@@ -49,10 +51,10 @@ else()
     endif()
 endif()
 
-target_link_libraries(${PROJECT_NAME} PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
-target_link_libraries(${PROJECT_NAME} PUBLIC Qt${QT_VERSION_MAJOR}::Concurrent)
-target_link_libraries(${PROJECT_NAME} PUBLIC Qt${QT_VERSION_MAJOR}::Sql)
-target_link_libraries(${PROJECT_NAME} PUBLIC Qt${QT_VERSION_MAJOR}::Charts)
+foreach (COMPONENT ${QT_COMPONENTS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC Qt${QT_VERSION_MAJOR}::${COMPONENT})
+    message("Linking ${COMPONENT}")
+endforeach (COMPONENT)
 
 include_directories(${PROJECT_NAME} ui)
 include_directories(${PROJECT_NAME} includes/utils)
