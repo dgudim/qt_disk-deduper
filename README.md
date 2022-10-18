@@ -1,4 +1,8 @@
-# qt_disk-deduper
+<h1 id="title">Disk deduper</h1>
+
+<img src="https://user-images.githubusercontent.com/34401005/196507460-e3c31d80-63a9-455f-aac4-cc4d1cc540d3.png" height=150 id="icon"></img>
+
+A desktop app that will help you find and deal with file duplicates on you drive
 
 ## Features
 - Blazingly fast - due to using more or less advanced algorithms and multithreading
@@ -29,7 +33,11 @@ Windows - Not yet
 
 ## How do I use it?
 
-Tutorial coming soon...
+Tutorial coming soon, you can look at the UI for now.
+| UI |
+| -- |
+| <img src="https://user-images.githubusercontent.com/34401005/196508114-6e49fc33-9786-4fd4-9beb-45efad717c83.png" height=150 id="thumb"></img> |
+
 
 ## Installation
 At the moment there are no prebuilt binaries, so you will have to compile from source
